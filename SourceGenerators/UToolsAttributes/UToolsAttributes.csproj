@@ -7,15 +7,16 @@
         <LangVersion>9</LangVersion>
         <AssemblyVersion>1.0.0</AssemblyVersion>
         <FileVersion>1.0.0</FileVersion>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-      <OutputPath>../Build/Debug</OutputPath>
+      <OutputPath>../../Packages/Sangria/SourceGenerators/</OutputPath>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-      <OutputPath>../Build/Release</OutputPath>
+      <OutputPath>../../Packages/Sangria/SourceGenerators/</OutputPath>
     </PropertyGroup>
 
 </Project>
