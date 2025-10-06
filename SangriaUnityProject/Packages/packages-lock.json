@@ -326,8 +326,8 @@
       },
       "url": "https://packages.unity.com"
     },
-    "com.vij.utools": {
-      "version": "file:../../Packages/UTools",
+    "com.propellerheadvij.sangria": {
+      "version": "file:../../Packages/Sangria",
       "depth": 0,
       "source": "local",
       "dependencies": {}

@@ -1,0 +1,14 @@
+{
+  "name": "com.propellerheadvij.sangria",
+  "displayName": "Sangria",
+  "version": "0.2.0",
+  "unity": "6000.2",
+  "description": "A coctail of different Unity tools",
+  "author": {
+    "name": "ViJ"
+  },
+  "keywords": [
+    "tools",
+    "utilities"
+  ]
+}
