@@ -149,6 +149,18 @@ namespace UTools.SourceGenerators
             }
         }
 
+        private static string ToVisibilityKeyword(Visibility visibility)
+        {
+            switch (visibility)
+            {
+                case Visibility.Public: return "public";
+                case Visibility.Internal: return "internal";
+                case Visibility.Protected: return "protected";
+                case Visibility.Private: return "private";
+                default: return "public";
+            }
+        }
+
         private static MethodDeclarationSyntax CreateDisposableSubscriptionMethod(
             TypeSyntax fieldType,
             string subscriptionMethodName,
@@ -158,85 +170,21 @@ namespace UTools.SourceGenerators
             Visibility visibility
         )
         {
-            var visibilityToken = visibility.ToVisibilitySyntaxKind();
+            // Hybrid approach: build readable C# as a string and parse into a syntax node
+            var vis = ToVisibilityKeyword(visibility);
+            var staticKw = isStatic ? " static" : string.Empty;
+            var typeText = fieldType.ToString();
+            var handlerType = isStatic ? $"Action<{typeText}>" : $"EventHandler<{typeText}>";
+            var invokeArgs = isStatic ? fieldName : $"this, {fieldName}";
 
-            var modifiers = isStatic
-                ? SyntaxFactory.TokenList(SyntaxFactory.Token(visibilityToken),
-                    SyntaxFactory.Token(SyntaxKind.StaticKeyword))
-                : SyntaxFactory.TokenList(SyntaxFactory.Token(visibilityToken));
+            var code = $@"{vis}{staticKw} IDisposable {subscriptionMethodName}({handlerType} handler, bool initialCall = true)
+            {{
+                {eventName} += handler;
+                if (initialCall) handler?.Invoke({invokeArgs});
+                return new DisposeAction(() => {eventName} -= handler);
+            }}";
 
-            var eventHandlerTypeName = isStatic ? "Action" : "EventHandler";
-            var eventHandlerTypeArgumentList =
-                SyntaxFactory.TypeArgumentList(SyntaxFactory.SingletonSeparatedList(fieldType));
-            var eventHandlerType = SyntaxFactory.GenericName(SyntaxFactory.Identifier(eventHandlerTypeName))
-                .WithTypeArgumentList(eventHandlerTypeArgumentList);
-
-            // Create first parameter - handler
-            var handlerParameter = SyntaxFactory.Parameter(SyntaxFactory.Identifier("handler"))
-                .WithType(eventHandlerType);
-
-            // Create second parameter - initialCall with default value true
-            var initialCallParameter = SyntaxFactory.Parameter(SyntaxFactory.Identifier("initialCall"))
-                .WithType(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.BoolKeyword)))
-                .WithDefault(SyntaxFactory.EqualsValueClause(
-                    SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression)));
-
-            // Create parameter list with both parameters
-            var parameters = SyntaxFactory.ParameterList(
-                SyntaxFactory.SeparatedList(new[] { handlerParameter, initialCallParameter }));
-
-            var eventNameExpression = SyntaxFactory.IdentifierName(eventName);
-            var addAssignment = SyntaxFactory.AssignmentExpression(SyntaxKind.AddAssignmentExpression,
-                eventNameExpression, SyntaxFactory.IdentifierName("handler"));
-            var removeAssignment =
-                SyntaxFactory.AssignmentExpression(SyntaxKind.SubtractAssignmentExpression, eventNameExpression,
-                    SyntaxFactory.IdentifierName("handler"));
-
-            var handlerInvokeArguments = isStatic
-                ? SyntaxFactory.ArgumentList(
-                    SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.Argument(SyntaxFactory.IdentifierName(fieldName))))
-                : SyntaxFactory.ArgumentList(
-                    SyntaxFactory.SeparatedList(
-                        new[]
-                        {
-                            SyntaxFactory.Argument(SyntaxFactory.ThisExpression()),
-                            SyntaxFactory.Argument(SyntaxFactory.IdentifierName(fieldName))
-                        }
-                    )
-                );
-
-            // Create conditional handler invocation - only if initialCall is true
-            var handlerInvokeExpression = SyntaxFactory.ConditionalAccessExpression(
-                SyntaxFactory.IdentifierName("handler"),
-                SyntaxFactory
-                    .InvocationExpression(
-                        SyntaxFactory.MemberBindingExpression(SyntaxFactory.IdentifierName("Invoke")))
-                    .WithArgumentList(handlerInvokeArguments));
-
-            var conditionalHandlerInvokeStatement = SyntaxFactory.IfStatement(
-                SyntaxFactory.IdentifierName("initialCall"),
-                SyntaxFactory.ExpressionStatement(handlerInvokeExpression));
-
-            var returnStatement = SyntaxFactory.ReturnStatement(
-                SyntaxFactory.ObjectCreationExpression(SyntaxFactory.IdentifierName("DisposeAction"))
-                    .WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.Argument(
-                            SyntaxFactory.ParenthesizedLambdaExpression(removeAssignment))))));
-
-            // Create method body with subscription, conditional invocation, and return statement
-            var methodBody = SyntaxFactory.Block(
-                SyntaxFactory.ExpressionStatement(addAssignment),
-                conditionalHandlerInvokeStatement,
-                returnStatement);
-
-            var methodDeclaration = SyntaxFactory.MethodDeclaration(SyntaxFactory.IdentifierName("IDisposable"),
-                    SyntaxFactory.Identifier(subscriptionMethodName))
-                .WithModifiers(modifiers)
-                .WithParameterList(parameters)
-                .WithBody(methodBody);
-
-            return methodDeclaration;
+            return (MethodDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration(code);
         }
 
         private static Visibility GetVisibility(FieldDeclarationSyntax fieldNode, Compilation compilation, string attributeName, string parameterName, Visibility defaultValue)
@@ -271,18 +219,11 @@ namespace UTools.SourceGenerators
         private static EventFieldDeclarationSyntax CreateEventField(TypeSyntax fieldType, string eventName,
             bool isStatic = false)
         {
-            var eventHandlerType = isStatic ? $"Action<{fieldType}>" : $"EventHandler<{fieldType}>";
-
-            var modifiers = isStatic
-                ? SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.StaticKeyword))
-                : SyntaxFactory.TokenList();
-            modifiers.Add(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
-
-            return SyntaxFactory.EventFieldDeclaration(
-                    SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName(eventHandlerType))
-                        .WithVariables(
-                            SyntaxFactory.SingletonSeparatedList(SyntaxFactory.VariableDeclarator(eventName))))
-                .WithModifiers(modifiers);
+            var typeText = fieldType.ToString();
+            var handlerType = isStatic ? $"Action<{typeText}>" : $"EventHandler<{typeText}>";
+            var staticKw = isStatic ? " static" : string.Empty;
+            var code = $"private{staticKw} event {handlerType} {eventName};";
+            return (EventFieldDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration(code);
         }
 
         /// <summary>
@@ -296,23 +237,11 @@ namespace UTools.SourceGenerators
         private static MethodDeclarationSyntax CreatePartialMethod(string methodName, TypeSyntax parameterType,
             bool isStatic, bool isRefInput)
         {
-            var modifiers = isStatic
-                ? SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.StaticKeyword),
-                    SyntaxFactory.Token(SyntaxKind.PartialKeyword))
-                : SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PartialKeyword));
-
-            var parameter = SyntaxFactory.Parameter(SyntaxFactory.Identifier("newValue"))
-                .WithType(parameterType);
-
-            if (isRefInput)
-                parameter = parameter.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.RefKeyword)));
-
-            return SyntaxFactory
-                .MethodDeclaration(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)),
-                    methodName)
-                .WithModifiers(modifiers)
-                .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SingletonSeparatedList(parameter)))
-                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+            var staticKw = isStatic ? "static " : string.Empty;
+            var refKw = isRefInput ? "ref " : string.Empty;
+            var typeText = parameterType.ToString();
+            var code = $"{staticKw}partial void {methodName}({refKw}{typeText} newValue);";
+            return (MethodDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration(code);
         }
 
         /// <summary>
@@ -344,63 +273,33 @@ namespace UTools.SourceGenerators
             var needGetterRestriction = getterVisibility > setterVisibility;
             var needSetterRestriction = setterVisibility > getterVisibility;
 
-            var modifiers = SyntaxFactory.TokenList(SyntaxFactory.Token(lessRestrictiveVisibility.ToVisibilitySyntaxKind()));
-            if (isStatic)
-                modifiers = modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
+            var propVis = ToVisibilityKeyword(lessRestrictiveVisibility);
+            var staticKw = isStatic ? " static" : string.Empty;
+            var typeText = fieldType.ToString();
 
-            var eventInvocation = isStatic
+            var eventInvoke = isStatic
                 ? $"{eventCallbackName}?.Invoke(value);"
-                : $"{eventCallbackName}?.Invoke(this, value)";
-            var eventInvocationExpression = SyntaxFactory.ParseExpression(eventInvocation);
+                : $"{eventCallbackName}?.Invoke(this, value);";
 
-            var getAccessor = SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithBody(
-                SyntaxFactory.Block(SyntaxFactory.SingletonList<StatementSyntax>(
-                    SyntaxFactory.ReturnStatement(SyntaxFactory.IdentifierName(fieldName)))));
-            getAccessor = needGetterRestriction
-                ? getAccessor.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(getterVisibility.ToVisibilitySyntaxKind())))
-                : getAccessor;
+            var getterMod = needGetterRestriction ? ToVisibilityKeyword(getterVisibility) + " " : string.Empty;
+            var setterMod = needSetterRestriction ? ToVisibilityKeyword(setterVisibility) + " " : string.Empty;
 
-            var notEqualsExpressionCode = $"!EqualityComparer<{fieldType}>.Default.Equals({fieldName}, value)";
-            var notEqualsExpression = SyntaxFactory.ParseExpression(notEqualsExpressionCode);
+            var code = $@"{propVis}{staticKw} {typeText} {propertyName}
+{{
+    {getterMod}get {{ return {fieldName}; }}
+    {setterMod}set
+    {{
+        {partialBeforeMethodName}(ref value);
+        if (!EqualityComparer<{typeText}>.Default.Equals({fieldName}, value))
+        {{
+            {fieldName} = value;
+            {methodCallbackName}(value);
+            {eventInvoke}
+        }}
+    }}
+}}";
 
-            //partial method invocation before the field assignment, with ref keyword
-            var partialBeforeMethodInvocation = SyntaxFactory.InvocationExpression(
-                SyntaxFactory.IdentifierName(partialBeforeMethodName),
-                SyntaxFactory.ArgumentList(
-                    SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.Argument(SyntaxFactory.IdentifierName("value")).WithRefKindKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword)))));
-
-            //partial method invocation after the field assignment
-            var partialMethodInvocation = SyntaxFactory.InvocationExpression(
-                SyntaxFactory.IdentifierName(methodCallbackName),
-                SyntaxFactory.ArgumentList(
-                    SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.Argument(SyntaxFactory.IdentifierName("value")))));
-
-            var assignment = SyntaxFactory.AssignmentExpression(
-                SyntaxKind.SimpleAssignmentExpression,
-                SyntaxFactory.IdentifierName(fieldName),
-                SyntaxFactory.IdentifierName("value"));
-
-            var setAccessor = SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithBody(
-                SyntaxFactory.Block(
-                    SyntaxFactory.ExpressionStatement(partialBeforeMethodInvocation),
-                    SyntaxFactory.IfStatement(notEqualsExpression,
-                        SyntaxFactory.Block(
-                            SyntaxFactory.ExpressionStatement(assignment),
-                            SyntaxFactory.ExpressionStatement(partialMethodInvocation),
-                            SyntaxFactory.ExpressionStatement(eventInvocationExpression)
-                        ))));
-
-            setAccessor = needSetterRestriction
-                ? setAccessor.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(setterVisibility.ToVisibilitySyntaxKind())))
-                : setAccessor;
-
-            var propertyDeclaration = SyntaxFactory.PropertyDeclaration(fieldType, propertyName)
-                .WithModifiers(modifiers)
-                .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(new[] { getAccessor, setAccessor })));
-
-            return propertyDeclaration;
+            return (PropertyDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration(code);
         }
     }
 }
