@@ -13,7 +13,6 @@ namespace UTools.SourceGenerators
     [Generator]
     public class FieldSubscriptionsGenerator : ISourceGenerator
     {
-        private readonly List<MemberDeclarationSyntax> m_Members = new();
 
         private readonly List<UsingDirectiveSyntax> m_ExtraUsing = new()
         {
@@ -64,29 +63,13 @@ namespace UTools.SourceGenerators
                     var fieldName = fieldNode.Declaration.Variables.First().Identifier.Text;
                     var privateEventName = $"{fieldName}Changed";
                     var propertyName = fieldName.RemovePrefix();
-                    var subscriptionEventName = $"{propertyName}Changed";
                     var subscriptionMethodName = $"SubscribeTo{propertyName}";
                     var partialMethodName = $"On{propertyName}Change";
                     var partialBeforeMethodName = $"Before{propertyName}Change";
 
-                    //PREPARE GETTER AND SETTERS VISIBILITY
-                    var setterVisibilityFound = fieldNode.TryGetAttributeParameter(
-                        compilation,
-                        subscriptionAttribute,
-                        nameof(PropertySubscription.SetterVisibility),
-                        out var setterVisibilityExp);
-                    var getterVisibilityFound = fieldNode.TryGetAttributeParameter(
-                        compilation, subscriptionAttribute,
-                        nameof(PropertySubscription.GetterVisibility),
-                        out var getterVisibilityExp);
-
-                    var setterVisibility = Visibility.Public;
-                    if (setterVisibilityFound)
-                        setterVisibility = (Visibility)Enum.Parse(typeof(Visibility), setterVisibilityExp.ToString().GetLastWord());
-
-                    var getterVisibility = Visibility.Public;
-                    if (getterVisibilityFound)
-                        getterVisibility = (Visibility)Enum.Parse(typeof(Visibility), getterVisibilityExp.ToString().GetLastWord());
+                    // Prepare getter and setter visibility using helper
+                    var setterVisibility = GetVisibility(fieldNode, compilation, subscriptionAttribute, nameof(PropertySubscription.SetterVisibility), Visibility.Public);
+                    var getterVisibility = GetVisibility(fieldNode, compilation, subscriptionAttribute, nameof(PropertySubscription.GetterVisibility), Visibility.Public);
 
                     var eventField = CreateEventField(fieldType, privateEventName, isStatic);
 
@@ -105,11 +88,13 @@ namespace UTools.SourceGenerators
                     var partialBeforeMethod = CreatePartialMethod(partialBeforeMethodName, fieldType, isStatic, true);
                     var partialMethod = CreatePartialMethod(partialMethodName, fieldType, isStatic, false);
 
-                    m_Members.Clear();
-                    m_Members.Add(partialBeforeMethod);
-                    m_Members.Add(partialMethod);
-                    m_Members.Add(eventField);
-                    m_Members.Add(propertyDeclaration);
+                    var members = new List<MemberDeclarationSyntax>
+                    {
+                        partialBeforeMethod,
+                        partialMethod,
+                        eventField,
+                        propertyDeclaration
+                    };
 
                     var hasDisposableSubscription = fieldNode.HasAttribute(subscriptionAttribute);
 
@@ -133,10 +118,10 @@ namespace UTools.SourceGenerators
                         }
 
                         var subscription = CreateDisposableSubscriptionMethod(fieldType, subscriptionMethodName, fieldName, privateEventName, isStatic, getterVisibility);
-                        m_Members.Add(subscription);
+                        members.Add(subscription);
                     }
 
-                    newClass = newClass.AddMembers(m_Members.ToArray());
+                    newClass = newClass.AddMembers(members.ToArray());
                 }
 
                 var combinedUsing = classNode
@@ -254,65 +239,27 @@ namespace UTools.SourceGenerators
             return methodDeclaration;
         }
 
-        /// <summary>
-        ///  Create the subscription event for the given event name and field name
-        /// </summary>
-        /// <param name="fieldType"></param>
-        /// <param name="subscriptionEventName"></param>
-        /// <param name="fieldName"></param>
-        /// <param name="privateEventName"></param>
-        /// <param name="isStatic"></param>
-        /// <param name="visibility"></param>
-        /// <returns></returns>
-        private static EventDeclarationSyntax CreateSubscriptionEvent(
-            TypeSyntax fieldType,
-            string subscriptionEventName,
-            string fieldName,
-            string privateEventName,
-            bool isStatic,
-            Visibility visibility
-        )
+        private static Visibility GetVisibility(FieldDeclarationSyntax fieldNode, Compilation compilation, string attributeName, string parameterName, Visibility defaultValue)
         {
-            var genericType = isStatic ? "Action" : "EventHandler";
-            var visibilityToken = visibility.ToVisibilitySyntaxKind();
-            // public static or public
-            var modifiers = isStatic
-                ? SyntaxFactory.TokenList(SyntaxFactory.Token(visibilityToken),
-                    SyntaxFactory.Token(SyntaxKind.StaticKeyword))
-                : SyntaxFactory.TokenList(SyntaxFactory.Token(visibilityToken));
+            var found = fieldNode.TryGetAttributeParameter(
+                compilation,
+                attributeName,
+                parameterName,
+                out var expr);
+            if (!found || expr == null)
+                return defaultValue;
 
-            //Prepare add and remove statements
-            var invokeStatement = isStatic
-                ? $"value?.Invoke({fieldName});"
-                : $"value?.Invoke(this, {fieldName});";
-            var addStatements = SyntaxFactory.List(new StatementSyntax[]
+            var lastWord = expr.ToString().GetLastWord();
+            try
             {
-                SyntaxFactory.ExpressionStatement(SyntaxFactory.ParseExpression(invokeStatement)),
-                SyntaxFactory.ExpressionStatement(SyntaxFactory.ParseExpression($"{privateEventName} += value"))
-            });
-
-            var removeStatements = SyntaxFactory.List(new StatementSyntax[]
+                return (Visibility)Enum.Parse(typeof(Visibility), lastWord);
+            }
+            catch
             {
-                SyntaxFactory.ExpressionStatement(SyntaxFactory.ParseExpression($"{privateEventName} -= value"))
-            });
-
-            var addAccessor = SyntaxFactory.AccessorDeclaration(SyntaxKind.AddAccessorDeclaration)
-                .WithBody(SyntaxFactory.Block(addStatements));
-
-            var removeAccessor = SyntaxFactory.AccessorDeclaration(SyntaxKind.RemoveAccessorDeclaration)
-                .WithBody(SyntaxFactory.Block(removeStatements));
-
-            //Buildup the event declaration
-            var eventSyntax = SyntaxFactory.EventDeclaration(
-                    SyntaxFactory.GenericName(SyntaxFactory.Identifier(genericType))
-                        .WithTypeArgumentList(SyntaxFactory.TypeArgumentList(
-                            SyntaxFactory.SingletonSeparatedList(fieldType))),
-                    SyntaxFactory.Identifier(subscriptionEventName))
-                .WithModifiers(modifiers)
-                .WithAccessorList(
-                    SyntaxFactory.AccessorList(SyntaxFactory.List(new[] { addAccessor, removeAccessor })));
-            return eventSyntax;
+                return defaultValue;
+            }
         }
+
 
         /// <summary>
         /// Create the event field declaration
