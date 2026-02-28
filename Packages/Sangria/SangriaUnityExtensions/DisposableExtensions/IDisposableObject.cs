@@ -1,6 +1,6 @@
 using System;
 
-namespace UTools
+namespace Sangria
 {
     public interface IDisposableObject : IDisposable, IDisposedNotifier
     {

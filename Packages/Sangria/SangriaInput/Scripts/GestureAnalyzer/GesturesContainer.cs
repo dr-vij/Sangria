@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace UTools.Input
+namespace Sangria.Input
 {
     public class GesturesContainer
     {

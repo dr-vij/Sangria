@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace UTools.Input
+namespace Sangria.Input
 {
     /// <summary>
     /// Simple object to contain information for drag inputs.

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UTools
+namespace Sangria
 {
     /// <summary>
     /// Class that combines multiple IDisposable objects into one, allowing them to be disposed together.

@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace UTools.Input
+namespace Sangria.Input
 {
     public class InteractionPointer
     {

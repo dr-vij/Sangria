@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 
-namespace UTools
+namespace Sangria
 {
     public class DisposeAction : DisposableObject
     {

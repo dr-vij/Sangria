@@ -5,7 +5,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace UTools.Input
+namespace Sangria.Input
 {
     public class InputManager : SingletonMonoBehaviour<InputManager>
     {

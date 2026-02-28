@@ -1,4 +1,4 @@
-namespace UTools.Input
+namespace Sangria.Input
 {
     public static partial class MouseInteractionEvents
     {

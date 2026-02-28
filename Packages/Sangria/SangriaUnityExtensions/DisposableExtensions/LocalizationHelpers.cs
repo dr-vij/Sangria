@@ -1,7 +1,7 @@
 using System;
 using UnityEngine.Localization;
 
-namespace UTools
+namespace Sangria
 {
     public static class LocalizationHelpers
     {

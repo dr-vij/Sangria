@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UTools.Input;
+using Sangria.Input;
 
 [RequireComponent(typeof(InteractionObjectBase))]
 public class TestObject : MonoBehaviour

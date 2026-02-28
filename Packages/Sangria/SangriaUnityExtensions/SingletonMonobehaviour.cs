@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace UTools
+namespace Sangria
 {
     public class SingletonMonoBehaviour<T> : MonoBehaviour where T : MonoBehaviour
     {

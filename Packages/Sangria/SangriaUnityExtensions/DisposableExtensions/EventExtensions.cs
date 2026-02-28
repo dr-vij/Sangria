@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace UTools
+namespace Sangria
 {
     public static class UnityEventExtensions
     {

@@ -1,4 +1,4 @@
-namespace UTools.Input
+namespace Sangria.Input
 {
     /// <summary>
     /// The basic interaction event.

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace UTools.Input
+namespace Sangria.Input
 {
     public interface IPointerGestureAnalyzer : IGestureAnalyzer
     {

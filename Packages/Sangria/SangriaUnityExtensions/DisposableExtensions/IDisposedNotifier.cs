@@ -1,7 +1,7 @@
 using System;
 
 
-namespace UTools
+namespace Sangria
 {
     public interface IDisposedNotifier
     {

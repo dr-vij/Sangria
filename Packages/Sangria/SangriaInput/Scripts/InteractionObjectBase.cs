@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace UTools.Input
+namespace Sangria.Input
 {
     /// <summary>
     /// Interaction object. it is used for all interaction subscriptions

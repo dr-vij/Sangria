@@ -6,7 +6,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.UIElements;
 
-namespace UTools.Input
+namespace Sangria.Input
 {
     public class CameraTracer
     {

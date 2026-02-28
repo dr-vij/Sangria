@@ -1,4 +1,4 @@
-namespace UTools.Input
+namespace Sangria.Input
 {
     /// <summary>
     /// These are object interaction events. They can be sent to specific objects

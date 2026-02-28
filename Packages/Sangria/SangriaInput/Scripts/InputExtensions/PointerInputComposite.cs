@@ -5,7 +5,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Layouts;
 using UnityEngine.InputSystem.Utilities;
 
-namespace UTools.Input
+namespace Sangria.Input
 {
     public static class Helpers
     {

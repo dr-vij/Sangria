@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace UTools.Input
+namespace Sangria.Input
 {
     /// <summary>
     /// The basic interaction event args. They can be handled and that is all at this time
