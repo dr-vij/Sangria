@@ -18,7 +18,7 @@ namespace Sangria.Input
 
         [SerializeField] private bool m_UpdateCausesGestureUpdates = false;
 
-        private InputActions m_Actions;
+        private SangriaInputActions m_Actions;
         private readonly List<Camera> m_Cameras = new();
         private readonly CameraTracer m_CameraTracer = new();
         private readonly HashSet<int> m_ActiveTouches = new();
@@ -82,7 +82,7 @@ namespace Sangria.Input
         /// </summary>
         private void OnEnable()
         {
-            m_Actions = new InputActions();
+            m_Actions = new SangriaInputActions();
             m_Actions.GestureActions.Enable();
 
             //Unified pointer gesture events. mouse + pen + touch
