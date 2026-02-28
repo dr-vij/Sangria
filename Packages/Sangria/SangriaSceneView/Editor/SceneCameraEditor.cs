@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace UTools.Editor
+namespace Sangria.SceneViewEditor
 {
     public enum SceneViewPlane
     {
@@ -34,7 +34,7 @@ namespace UTools.Editor
 
         //Rotation visualizer
         private Vector3 m_RotateAroundPoint;
-        private bool m_DragWasStarted = false;
+        private bool m_DragWasStarted;
 
         //Zoom point visualizer
         private Vector3 m_ZoomTarget;

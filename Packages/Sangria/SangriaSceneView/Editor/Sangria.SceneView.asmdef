@@ -1,5 +1,5 @@
 {
-    "name": "ExtendedSceneView",
+    "name": "Sangria.SceneView",
     "rootNamespace": "",
     "references": [],
     "includePlatforms": [

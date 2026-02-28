@@ -3,11 +3,15 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace UTools.Editor
+namespace Sangria.SceneViewEditor
 {
     [Serializable]
     public class SceneViewSettings
     {
+        public float ScrollSensetivity;
+        public float NearClip;
+        public float FarClip;
+        
         private SceneViewPlane m_Plane;
         private List<Plane> m_Planes = new List<Plane>();
 
@@ -51,9 +55,5 @@ namespace UTools.Editor
                     break;
             }
         }
-
-        public float ScrollSensetivity;
-        public float NearClip;
-        public float FarClip;
     }
 }
