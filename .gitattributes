@@ -1,66 +1,373 @@
-*.jpg filter=lfs diff=lfs merge=lfs -text
-*.png filter=lfs diff=lfs merge=lfs -text
-*.wav filter=lfs diff=lfs merge=lfs -text
-*.mp3 filter=lfs diff=lfs merge=lfs -text
-*.fbx filter=lfs diff=lfs merge=lfs -text
-*.psd filter=lfs diff=lfs merge=lfs -text
-*.dll filter=lfs diff=lfs merge=lfs -text
-*.exr filter=lfs diff=lfs merge=lfs -text
-*.obj filter=lfs diff=lfs merge=lfs -text
-*.blend filter=lfs diff=lfs merge=lfs -text
-*.PNG filter=lfs diff=lfs merge=lfs -text
-*.hdr filter=lfs diff=lfs merge=lfs -text
-*.tif filter=lfs diff=lfs merge=lfs -text
-*.wma filter=lfs diff=lfs merge=lfs -text
-*.sfo filter=lfs diff=lfs merge=lfs -text
-*.spc filter=lfs diff=lfs merge=lfs -text
-*.hiplc filter=lfs diff=lfs merge=lfs -text
-*.kra filter=lfs diff=lfs merge=lfs -text
-*.crt filter=lfs diff=lfs merge=lfs -text
-*.bnk filter=lfs diff=lfs merge=lfs -text
-*.a filter=lfs diff=lfs merge=lfs -text
-*.sig filter=lfs diff=lfs merge=lfs -text
-*.hdalc filter=lfs diff=lfs merge=lfs -text
-*.aar filter=lfs diff=lfs merge=lfs -text
-*.exe filter=lfs diff=lfs merge=lfs -text
-*.pdb filter=lfs diff=lfs merge=lfs -text
-*.spp filter=lfs diff=lfs merge=lfs -text
-*.dat filter=lfs diff=lfs merge=lfs -text
-*.archive filter=lfs diff=lfs merge=lfs -text
-*.db filter=lfs diff=lfs merge=lfs -text
-*.dylib filter=lfs diff=lfs merge=lfs -text
-*.mp4 filter=lfs diff=lfs merge=lfs -text
-*.jar filter=lfs diff=lfs merge=lfs -text
-*.zip filter=lfs diff=lfs merge=lfs -text
-*.so filter=lfs diff=lfs merge=lfs -text
-*.ico filter=lfs diff=lfs merge=lfs -text
-*.hda filter=lfs diff=lfs merge=lfs -text
-*.mb filter=lfs diff=lfs merge=lfs -text
-*.lib filter=lfs diff=lfs merge=lfs -text
-*.pdf filter=lfs diff=lfs merge=lfs -text
-*.tga filter=lfs diff=lfs merge=lfs -text
-*.ttf filter=lfs diff=lfs merge=lfs -text
-*.otf filter=lfs diff=lfs merge=lfs -text
-*.chm filter=lfs diff=lfs merge=lfs -text
-*.xlsx filter=lfs diff=lfs merge=lfs -text
-*.prx filter=lfs diff=lfs merge=lfs -text
-*.bmp filter=lfs diff=lfs merge=lfs -text
-*.ogg filter=lfs diff=lfs merge=lfs -text
-*.rar filter=lfs diff=lfs merge=lfs -text
-*.avi filter=lfs diff=lfs merge=lfs -text
-*.st filter=lfs diff=lfs merge=lfs -text
-*.TGA filter=lfs diff=lfs merge=lfs -text
-*.BMP filter=lfs diff=lfs merge=lfs -text
-*.FBX filter=lfs diff=lfs merge=lfs -text
-*.JPG filter=lfs diff=lfs merge=lfs -text
-*.jpeg filter=lfs diff=lfs merge=lfs -text
-*.mesh filter=lfs diff=lfs merge=lfs -text
+# Text normalization
 * text=auto eol=lf
-*.bytes filter=lfs diff=lfs merge=lfs -text
-*SDF.asset filter=lfs diff=lfs merge-lfs -text
-*.bank filter=lfs diff=lfs merge=lfs -text
-Assets/Plugins/FMOD/**/*.bundle text eol=lf
-Assets/Plugins/FMOD/**/Info.plist text eol=lf
-*SDF.asset filter=lfs diff=lfs merge=lfs -text
 
+# C# source and .NET/Unity project files
+# C# source code.
+*.cs text diff=csharp
+# C# source code (uppercase).
+*.CS text diff=csharp
+# MSBuild C# project file.
+*.csproj text
+# MSBuild C# project file (uppercase).
+*.CSPROJ text
+# Visual Studio solution file.
+*.sln text
+# Visual Studio solution file (uppercase).
+*.SLN text
+# MSBuild properties file.
+*.props text
+# MSBuild properties file (uppercase).
+*.PROPS text
+# MSBuild targets file.
+*.targets text
+# MSBuild targets file (uppercase).
+*.TARGETS text
+# Unity assembly definition (JSON).
+*.asmdef text
+# Unity assembly definition (JSON, uppercase).
+*.ASMDEF text
+# Unity assembly reference (JSON).
+*.asmref text
+# Unity assembly reference (JSON, uppercase).
+*.ASMREF text
+
+# C/C++ source and headers
+# C source code.
+*.c text diff=cpp
+# C source code (uppercase).
+*.C text diff=cpp
+# C++ source code.
+*.cpp text diff=cpp
+# C++ source code (uppercase).
+*.CPP text diff=cpp
+# C++ source code.
+*.cxx text diff=cpp
+# C++ source code (uppercase).
+*.CXX text diff=cpp
+# C++ source code.
+*.cc text diff=cpp
+# C++ source code (uppercase).
+*.CC text diff=cpp
+# C/C++ header.
+*.h text diff=cpp
+# C/C++ header (uppercase).
+*.H text diff=cpp
+# C++ header.
+*.hpp text diff=cpp
+# C++ header (uppercase).
+*.HPP text diff=cpp
+# C++ header.
+*.hxx text diff=cpp
+# C++ header (uppercase).
+*.HXX text diff=cpp
+# C++ inline header.
+*.inl text diff=cpp
+# C++ inline header (uppercase).
+*.INL text diff=cpp
+
+# Binary and media assets tracked with Git LFS
+# Images / textures
+# PNG image/texture.
+*.png filter=lfs diff=lfs merge=lfs -text
+# PNG image/texture (uppercase).
+*.PNG filter=lfs diff=lfs merge=lfs -text
+# JPEG image/texture.
+*.jpg filter=lfs diff=lfs merge=lfs -text
+# JPEG image/texture (uppercase).
+*.JPG filter=lfs diff=lfs merge=lfs -text
+# JPEG image/texture.
+*.jpeg filter=lfs diff=lfs merge=lfs -text
+# JPEG image/texture (uppercase).
+*.JPEG filter=lfs diff=lfs merge=lfs -text
+# GIF image/texture.
 *.gif filter=lfs diff=lfs merge=lfs -text
+# GIF image/texture (uppercase).
+*.GIF filter=lfs diff=lfs merge=lfs -text
+# BMP image/texture.
+*.bmp filter=lfs diff=lfs merge=lfs -text
+# BMP image/texture (uppercase).
+*.BMP filter=lfs diff=lfs merge=lfs -text
+# TGA image/texture.
+*.tga filter=lfs diff=lfs merge=lfs -text
+# TGA image/texture (uppercase).
+*.TGA filter=lfs diff=lfs merge=lfs -text
+# TIFF image/texture.
+*.tif filter=lfs diff=lfs merge=lfs -text
+# TIFF image/texture (uppercase).
+*.TIF filter=lfs diff=lfs merge=lfs -text
+# TIFF image/texture.
+*.tiff filter=lfs diff=lfs merge=lfs -text
+# TIFF image/texture (uppercase).
+*.TIFF filter=lfs diff=lfs merge=lfs -text
+# OpenEXR image/texture.
+*.exr filter=lfs diff=lfs merge=lfs -text
+# OpenEXR image/texture (uppercase).
+*.EXR filter=lfs diff=lfs merge=lfs -text
+# HDR image/texture.
+*.hdr filter=lfs diff=lfs merge=lfs -text
+# HDR image/texture (uppercase).
+*.HDR filter=lfs diff=lfs merge=lfs -text
+# Photoshop document.
+*.psd filter=lfs diff=lfs merge=lfs -text
+# Photoshop document (uppercase).
+*.PSD filter=lfs diff=lfs merge=lfs -text
+# Photoshop large document.
+*.psb filter=lfs diff=lfs merge=lfs -text
+# Photoshop large document (uppercase).
+*.PSB filter=lfs diff=lfs merge=lfs -text
+# Krita document.
+*.kra filter=lfs diff=lfs merge=lfs -text
+# Krita document (uppercase).
+*.KRA filter=lfs diff=lfs merge=lfs -text
+# Windows icon.
+*.ico filter=lfs diff=lfs merge=lfs -text
+# Windows icon (uppercase).
+*.ICO filter=lfs diff=lfs merge=lfs -text
+# DDS texture.
+*.dds filter=lfs diff=lfs merge=lfs -text
+# DDS texture (uppercase).
+*.DDS filter=lfs diff=lfs merge=lfs -text
+
+# Audio
+# WAV audio.
+*.wav filter=lfs diff=lfs merge=lfs -text
+# WAV audio (uppercase).
+*.WAV filter=lfs diff=lfs merge=lfs -text
+# MP3 audio.
+*.mp3 filter=lfs diff=lfs merge=lfs -text
+# MP3 audio (uppercase).
+*.MP3 filter=lfs diff=lfs merge=lfs -text
+# OGG audio.
+*.ogg filter=lfs diff=lfs merge=lfs -text
+# OGG audio (uppercase).
+*.OGG filter=lfs diff=lfs merge=lfs -text
+# WMA audio.
+*.wma filter=lfs diff=lfs merge=lfs -text
+# WMA audio (uppercase).
+*.WMA filter=lfs diff=lfs merge=lfs -text
+# FLAC audio.
+*.flac filter=lfs diff=lfs merge=lfs -text
+# FLAC audio (uppercase).
+*.FLAC filter=lfs diff=lfs merge=lfs -text
+# AIFF audio.
+*.aif filter=lfs diff=lfs merge=lfs -text
+# AIFF audio (uppercase).
+*.AIF filter=lfs diff=lfs merge=lfs -text
+# AIFF audio.
+*.aiff filter=lfs diff=lfs merge=lfs -text
+# AIFF audio (uppercase).
+*.AIFF filter=lfs diff=lfs merge=lfs -text
+# M4A audio.
+*.m4a filter=lfs diff=lfs merge=lfs -text
+# M4A audio (uppercase).
+*.M4A filter=lfs diff=lfs merge=lfs -text
+# SPC audio data.
+*.spc filter=lfs diff=lfs merge=lfs -text
+# SPC audio data (uppercase).
+*.SPC filter=lfs diff=lfs merge=lfs -text
+# Audio bank file.
+*.bnk filter=lfs diff=lfs merge=lfs -text
+# Audio bank file (uppercase).
+*.BNK filter=lfs diff=lfs merge=lfs -text
+# Audio bank file.
+*.bank filter=lfs diff=lfs merge=lfs -text
+# Audio bank file (uppercase).
+*.BANK filter=lfs diff=lfs merge=lfs -text
+
+# Video
+# MP4 video.
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+# MP4 video (uppercase).
+*.MP4 filter=lfs diff=lfs merge=lfs -text
+# AVI video.
+*.avi filter=lfs diff=lfs merge=lfs -text
+# AVI video (uppercase).
+*.AVI filter=lfs diff=lfs merge=lfs -text
+# MOV video.
+*.mov filter=lfs diff=lfs merge=lfs -text
+# MOV video (uppercase).
+*.MOV filter=lfs diff=lfs merge=lfs -text
+# WebM video.
+*.webm filter=lfs diff=lfs merge=lfs -text
+# WebM video (uppercase).
+*.WEBM filter=lfs diff=lfs merge=lfs -text
+# MKV video.
+*.mkv filter=lfs diff=lfs merge=lfs -text
+# MKV video (uppercase).
+*.MKV filter=lfs diff=lfs merge=lfs -text
+
+# 3D models / DCC / scene data
+# FBX 3D model.
+*.fbx filter=lfs diff=lfs merge=lfs -text
+# FBX 3D model (uppercase).
+*.FBX filter=lfs diff=lfs merge=lfs -text
+# OBJ 3D model.
+*.obj filter=lfs diff=lfs merge=lfs -text
+# OBJ 3D model (uppercase).
+*.OBJ filter=lfs diff=lfs merge=lfs -text
+# Blender project file.
+*.blend filter=lfs diff=lfs merge=lfs -text
+# Blender project file (uppercase).
+*.BLEND filter=lfs diff=lfs merge=lfs -text
+# Mesh asset.
+*.mesh filter=lfs diff=lfs merge=lfs -text
+# Mesh asset (uppercase).
+*.MESH filter=lfs diff=lfs merge=lfs -text
+# Maya binary scene.
+*.mb filter=lfs diff=lfs merge=lfs -text
+# Maya binary scene (uppercase).
+*.MB filter=lfs diff=lfs merge=lfs -text
+# Houdini Digital Asset.
+*.hda filter=lfs diff=lfs merge=lfs -text
+# Houdini Digital Asset (uppercase).
+*.HDA filter=lfs diff=lfs merge=lfs -text
+# Houdini Digital Asset (compiled).
+*.hdalc filter=lfs diff=lfs merge=lfs -text
+# Houdini Digital Asset (compiled, uppercase).
+*.HDALC filter=lfs diff=lfs merge=lfs -text
+# Houdini HIP (compiled).
+*.hiplc filter=lfs diff=lfs merge=lfs -text
+# Houdini HIP (compiled, uppercase).
+*.HIPLC filter=lfs diff=lfs merge=lfs -text
+# Substance Painter project.
+*.spp filter=lfs diff=lfs merge=lfs -text
+# Substance Painter project (uppercase).
+*.SPP filter=lfs diff=lfs merge=lfs -text
+# Binary project/data file (.st).
+*.st filter=lfs diff=lfs merge=lfs -text
+# Binary project/data file (.st, uppercase).
+*.ST filter=lfs diff=lfs merge=lfs -text
+
+# Fonts
+# TrueType font.
+*.ttf filter=lfs diff=lfs merge=lfs -text
+# TrueType font (uppercase).
+*.TTF filter=lfs diff=lfs merge=lfs -text
+# OpenType font.
+*.otf filter=lfs diff=lfs merge=lfs -text
+# OpenType font (uppercase).
+*.OTF filter=lfs diff=lfs merge=lfs -text
+
+# Executables, libraries, and symbols
+# Windows dynamic library.
+*.dll filter=lfs diff=lfs merge=lfs -text
+# Windows dynamic library (uppercase).
+*.DLL filter=lfs diff=lfs merge=lfs -text
+# Windows executable.
+*.exe filter=lfs diff=lfs merge=lfs -text
+# Windows executable (uppercase).
+*.EXE filter=lfs diff=lfs merge=lfs -text
+# Debug symbols (PDB).
+*.pdb filter=lfs diff=lfs merge=lfs -text
+# Debug symbols (PDB, uppercase).
+*.PDB filter=lfs diff=lfs merge=lfs -text
+# Static library (MSVC).
+*.lib filter=lfs diff=lfs merge=lfs -text
+# Static library (MSVC, uppercase).
+*.LIB filter=lfs diff=lfs merge=lfs -text
+# Static library (Unix).
+*.a filter=lfs diff=lfs merge=lfs -text
+# Static library (Unix, uppercase).
+*.A filter=lfs diff=lfs merge=lfs -text
+# Linux shared object.
+*.so filter=lfs diff=lfs merge=lfs -text
+# Linux shared object (uppercase).
+*.SO filter=lfs diff=lfs merge=lfs -text
+# macOS dynamic library.
+*.dylib filter=lfs diff=lfs merge=lfs -text
+# macOS dynamic library (uppercase).
+*.DYLIB filter=lfs diff=lfs merge=lfs -text
+# Binary plugin (PRX).
+*.prx filter=lfs diff=lfs merge=lfs -text
+# Binary plugin (PRX, uppercase).
+*.PRX filter=lfs diff=lfs merge=lfs -text
+
+# Packages / archives
+# ZIP archive.
+*.zip filter=lfs diff=lfs merge=lfs -text
+# ZIP archive (uppercase).
+*.ZIP filter=lfs diff=lfs merge=lfs -text
+# RAR archive.
+*.rar filter=lfs diff=lfs merge=lfs -text
+# RAR archive (uppercase).
+*.RAR filter=lfs diff=lfs merge=lfs -text
+# 7-Zip archive.
+*.7z filter=lfs diff=lfs merge=lfs -text
+# 7-Zip archive (uppercase).
+*.7Z filter=lfs diff=lfs merge=lfs -text
+# TAR archive.
+*.tar filter=lfs diff=lfs merge=lfs -text
+# TAR archive (uppercase).
+*.TAR filter=lfs diff=lfs merge=lfs -text
+# Gzip archive.
+*.gz filter=lfs diff=lfs merge=lfs -text
+# Gzip archive (uppercase).
+*.GZ filter=lfs diff=lfs merge=lfs -text
+# Generic archive file.
+*.archive filter=lfs diff=lfs merge=lfs -text
+# Generic archive file (uppercase).
+*.ARCHIVE filter=lfs diff=lfs merge=lfs -text
+# Java archive (JAR).
+*.jar filter=lfs diff=lfs merge=lfs -text
+# Java archive (JAR, uppercase).
+*.JAR filter=lfs diff=lfs merge=lfs -text
+# Android library archive (AAR).
+*.aar filter=lfs diff=lfs merge=lfs -text
+# Android library archive (AAR, uppercase).
+*.AAR filter=lfs diff=lfs merge=lfs -text
+# Android package (APK).
+*.apk filter=lfs diff=lfs merge=lfs -text
+# Android package (APK, uppercase).
+*.APK filter=lfs diff=lfs merge=lfs -text
+# Unity package archive.
+*.unitypackage filter=lfs diff=lfs merge=lfs -text
+# Unity package archive (uppercase).
+*.UNITYPACKAGE filter=lfs diff=lfs merge=lfs -text
+
+# Documents / office files
+# PDF document.
+*.pdf filter=lfs diff=lfs merge=lfs -text
+# PDF document (uppercase).
+*.PDF filter=lfs diff=lfs merge=lfs -text
+# Compiled HTML help.
+*.chm filter=lfs diff=lfs merge=lfs -text
+# Compiled HTML help (uppercase).
+*.CHM filter=lfs diff=lfs merge=lfs -text
+# Excel spreadsheet.
+*.xlsx filter=lfs diff=lfs merge=lfs -text
+# Excel spreadsheet (uppercase).
+*.XLSX filter=lfs diff=lfs merge=lfs -text
+
+# Databases / data blobs
+# Database file.
+*.db filter=lfs diff=lfs merge=lfs -text
+# Database file (uppercase).
+*.DB filter=lfs diff=lfs merge=lfs -text
+# Binary data file.
+*.dat filter=lfs diff=lfs merge=lfs -text
+# Binary data file (uppercase).
+*.DAT filter=lfs diff=lfs merge=lfs -text
+# Unity TextAsset binary blob.
+*.bytes filter=lfs diff=lfs merge=lfs -text
+# Unity TextAsset binary blob (uppercase).
+*.BYTES filter=lfs diff=lfs merge=lfs -text
+
+# Certificates / signatures / metadata
+# Certificate file.
+*.crt filter=lfs diff=lfs merge=lfs -text
+# Certificate file (uppercase).
+*.CRT filter=lfs diff=lfs merge=lfs -text
+# Signature file.
+*.sig filter=lfs diff=lfs merge=lfs -text
+# Signature file (uppercase).
+*.SIG filter=lfs diff=lfs merge=lfs -text
+# Binary metadata file (.sfo).
+*.sfo filter=lfs diff=lfs merge=lfs -text
+# Binary metadata file (.sfo, uppercase).
+*.SFO filter=lfs diff=lfs merge=lfs -text
+
+# Unity-specific binary assets
+# Unity SDF font asset.
+*sdf.asset filter=lfs diff=lfs merge=lfs -text
+# Unity SDF font asset (uppercase).
+*SDF.asset filter=lfs diff=lfs merge=lfs -text
