@@ -7,14 +7,14 @@
   "targets": {
     ".NETStandard,Version=v2.0": {},
     ".NETStandard,Version=v2.0/": {
-      "UToolsGenerators/1.0.0": {
+      "SangriaGenerators/1.0.0": {
         "dependencies": {
           "Microsoft.CodeAnalysis": "3.8.0",
           "NETStandard.Library": "2.0.3",
-          "UToolsAttributes": "1.0.0"
+          "SangriaAttributes": "1.0.0"
         },
         "runtime": {
-          "UToolsGenerators.dll": {}
+          "SangriaGenerators.dll": {}
         }
       },
       "Humanizer.Core/2.2.0": {
@@ -787,15 +787,18 @@
           }
         }
       },
-      "UToolsAttributes/1.0.0": {
+      "SangriaAttributes/1.0.0": {
         "runtime": {
-          "UToolsAttributes.dll": {}
+          "SangriaAttributes.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0"
+          }
         }
       }
     }
   },
   "libraries": {
-    "UToolsGenerators/1.0.0": {
+    "SangriaGenerators/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
@@ -1136,7 +1139,7 @@
       "path": "system.threading.tasks.extensions/4.5.4",
       "hashPath": "system.threading.tasks.extensions.4.5.4.nupkg.sha512"
     },
-    "UToolsAttributes/1.0.0": {
+    "SangriaAttributes/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

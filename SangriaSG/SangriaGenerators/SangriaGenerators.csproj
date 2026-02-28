@@ -4,17 +4,18 @@
         <TargetFramework>netstandard2.0</TargetFramework>
         <RootNamespace>SangriaGenerators</RootNamespace>
         <LangVersion>9</LangVersion>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>SangriaGenerators</PackageId>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-        <OutputPath>../Build/Debug</OutputPath>
+        <OutputPath>../../Packages/Sangria/SangriaSourceGenerators/</OutputPath>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-        <OutputPath>../Build/Release</OutputPath>
+        <OutputPath>../../Packages/Sangria/SangriaSourceGenerators/</OutputPath>
     </PropertyGroup>
 
     <ItemGroup>

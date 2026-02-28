@@ -1,5 +1,5 @@
 using System;
-using UTools.SourceGeneratorAttributes;
+using Sangria.SourceGeneratorAttributes;
 
 namespace ViJApps.CanvasTexture
 {
