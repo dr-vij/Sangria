@@ -1,11 +1,11 @@
 {
   "name": "com.propellerheadvij.sangria",
   "displayName": "Sangria",
-  "version": "0.2.0",
-  "unity": "6000.2",
+  "version": "0.3.0",
+  "unity": "6000.3",
   "description": "A coctail of different Unity tools",
   "author": {
-    "name": "ViJ"
+    "name": "Viktor Grigorev"
   },
   "keywords": [
     "tools",
