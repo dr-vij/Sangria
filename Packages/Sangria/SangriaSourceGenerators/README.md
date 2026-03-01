@@ -1,3 +1,5 @@
+**IMPORTANT: FOR SUBSCRIPTIONS TO WORK, YOU NEED THE EXTENSION WITH DisposeAction (FROM SangriaUnityExtensions PACKAGE)!**
+
 # Sangria Source Generators Documentation
 
 ## Overview
