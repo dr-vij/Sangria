@@ -2,7 +2,8 @@
     "name": "Examples",
     "rootNamespace": "",
     "references": [
-        "GUID:2c22f889312604fa2814f58d8d4e3e6c"
+        "GUID:2c22f889312604fa2814f58d8d4e3e6c",
+        "GUID:744965c5e52674e6db25f4ec4590016d"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
