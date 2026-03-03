@@ -7,6 +7,12 @@
       "dependencies": {},
       "hash": "a9e27c03d411d2fca01cc7410c24c97cd77cb539"
     },
+    "com.propellerheadvij.sangria": {
+      "version": "file:com.propellerheadvij.sangria",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.unity.addressables": {
       "version": "2.9.0",
       "depth": 1,
