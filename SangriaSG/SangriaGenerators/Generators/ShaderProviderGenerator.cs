@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Sangria.SourceGeneratorAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
-using Sangria.SourceGeneratorAttributes;
+
 
 namespace Sangria.SourceGenerators
 {
@@ -26,16 +27,20 @@ namespace Sangria.SourceGenerators
             SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("UnityEngine")),
         };
         
-        // TODO: Implement custom errors.
-        // public static readonly DiagnosticDescriptor FailedToParseMessage = new DiagnosticDescriptor(
-        //     "SAMPLE001",
-        //     "Message title",
-        //     "Failed to parse message type '{0}'",
-        //     "Parser", DiagnosticSeverity.Error, true);
-        
         public void Execute(GeneratorExecutionContext context)
         {
-            // context.ReportDiagnostic(Diagnostic.Create(FailedToParseMessage, Location.None, "Sample message type"));
+            try
+            {
+                ExecuteInternal(context);
+            }
+            catch (Exception e)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Diagnostics.UnexpectedError, Location.None, nameof(ShaderProviderGenerator), e.Message));
+            }
+        }
+
+        private void ExecuteInternal(GeneratorExecutionContext context)
+        {
             var classes = context.Compilation.GetClassesByAttributes(ShaderPropertiesProviderAttribute);
             
             m_Members.Clear();
@@ -49,7 +54,10 @@ namespace Sangria.SourceGenerators
             {
                 //throw exception if class is not static and partial 
                 if (!classDeclaration.Modifiers.Any(SyntaxKind.StaticKeyword) || !classDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword))
-                    throw new Exception("Class with ShaderPropertiesProvider attribute must be static and partial");
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(Diagnostics.ClassMustBeStaticAndPartial, classDeclaration.Identifier.GetLocation(), classDeclaration.Identifier.Text, ShaderPropertiesProviderAttribute));
+                    continue;
+                }
             
                 m_Declarations.Clear();
                 m_Initializations.Clear();

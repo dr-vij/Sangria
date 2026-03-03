@@ -2,11 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Sangria.SourceGeneratorAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
-using Sangria.SourceGeneratorAttributes;
+
 
 namespace Sangria.SourceGenerators
 {
@@ -28,6 +29,18 @@ namespace Sangria.SourceGenerators
 
         public void Execute(GeneratorExecutionContext context)
         {
+            try
+            {
+                ExecuteInternal(context);
+            }
+            catch (Exception e)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Diagnostics.UnexpectedError, Location.None, nameof(FieldSubscriptionsGenerator), e.Message));
+            }
+        }
+
+        private void ExecuteInternal(GeneratorExecutionContext context)
+        {
             var compilation = context.Compilation;
             var subscriptionAttribute = nameof(PropertySubscription);
 
@@ -38,6 +51,12 @@ namespace Sangria.SourceGenerators
 
             foreach (var classNode in classNodes)
             {
+                if (!classNode.Modifiers.Any(SyntaxKind.PartialKeyword))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(Diagnostics.ClassMustBePartial, classNode.Identifier.GetLocation(), classNode.Identifier.Text, subscriptionAttribute));
+                    continue;
+                }
+
                 m_InterfaceBuilders.Clear();
 
                 var className = classNode.Identifier.Text;
