@@ -1,20 +1,29 @@
 using Unity.Collections;
 using Unity.Mathematics;
-using UnityEditor;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
-namespace PropellerheadMesh
+namespace SangriaMesh
 {
     public static class DetailVisualizer
     {
         public static void DrawPointGizmos(this NativeDetail detail, float pointSize, Color pointColor)
         {
-            detail.GetPointAttributeAccessor<float3>(AttributeID.Position, out var positionAccessor);
+            if (detail.TryGetPointAccessor<float3>(AttributeID.Position, out var positionAccessor) != CoreResult.Success)
+                return;
+
+            using var alivePoints = new NativeList<int>(Allocator.Temp);
+            detail.GetAllValidPoints(alivePoints);
+
             var initialColor = Gizmos.color;
             Gizmos.color = pointColor;
-            for (int i = 0; i < detail.PointCount; i++)
+
+            for (int i = 0; i < alivePoints.Length; i++)
             {
-                float3 pos = positionAccessor[i];
+                int pointIndex = alivePoints[i];
+                float3 pos = positionAccessor[pointIndex];
                 Gizmos.DrawWireCube(pos, new float3(pointSize, pointSize, pointSize));
             }
 
@@ -23,19 +32,33 @@ namespace PropellerheadMesh
 
         public static void DrawVertexNormalsGizmos(this NativeDetail detail, float normalLength, Color normalColor)
         {
-            detail.GetPointAttributeAccessor<float3>(AttributeID.Position, out var positionAccessor);
-            detail.GetVertexAttributeAccessor<float3>(AttributeID.Normal, out var normalAccessor);
+            if (detail.TryGetPointAccessor<float3>(AttributeID.Position, out var positionAccessor) != CoreResult.Success)
+                return;
+
+            bool hasVertexNormals =
+                detail.TryGetVertexAccessor<float3>(AttributeID.Normal, out var vertexNormalAccessor) == CoreResult.Success;
+            bool hasPointNormals =
+                detail.TryGetPointAccessor<float3>(AttributeID.Normal, out var pointNormalAccessor) == CoreResult.Success;
+
+            if (!hasVertexNormals && !hasPointNormals)
+                return;
+
+            using var aliveVertices = new NativeList<int>(Allocator.Temp);
+            detail.GetAllValidVertices(aliveVertices);
 
             var initialColor = Gizmos.color;
             Gizmos.color = normalColor;
 
-            for (int i = 0; i < detail.VertexCount; i++)
+            for (int i = 0; i < aliveVertices.Length; i++)
             {
-                int pointIndex = detail.GetVertexPoint(i);
-                float3 pos = positionAccessor[pointIndex];
-                float3 normal = normalAccessor[i];
-                float3 endPoint = pos + normal * normalLength;
+                int vertexIndex = aliveVertices[i];
+                int pointIndex = detail.GetVertexPoint(vertexIndex);
+                if (pointIndex < 0)
+                    continue;
 
+                float3 pos = positionAccessor[pointIndex];
+                float3 normal = hasVertexNormals ? vertexNormalAccessor[vertexIndex] : pointNormalAccessor[pointIndex];
+                float3 endPoint = pos + normal * normalLength;
                 Gizmos.DrawLine(pos, endPoint);
             }
 
@@ -45,68 +68,63 @@ namespace PropellerheadMesh
         public static void DrawPointNumbers(this NativeDetail detail, Color textColor, float offset = 0.1f)
         {
 #if UNITY_EDITOR
+            if (detail.TryGetPointAccessor<float3>(AttributeID.Position, out var positionAccessor) != CoreResult.Success)
+                return;
 
-            detail.GetPointAttributeAccessor<float3>(AttributeID.Position, out var positionAccessor);
+            using var alivePoints = new NativeList<int>(Allocator.Temp);
+            detail.GetAllValidPoints(alivePoints);
 
             var style = new GUIStyle
             {
-                normal =
-                {
-                    textColor = textColor
-                },
+                normal = { textColor = textColor },
                 fontSize = 12,
                 fontStyle = FontStyle.Bold
             };
 
-            for (int i = 0; i < detail.PointCount; i++)
+            for (int i = 0; i < alivePoints.Length; i++)
             {
-                float3 pos = positionAccessor[i];
+                int pointIndex = alivePoints[i];
+                float3 pos = positionAccessor[pointIndex];
                 Vector3 labelPos = pos + new float3(offset, offset, offset);
-                Handles.Label(labelPos, i.ToString(), style);
+                Handles.Label(labelPos, pointIndex.ToString(), style);
             }
 #endif
         }
-        
+
         public static void DrawPrimitiveLines(this NativeDetail detail, Color lineColor)
         {
-            detail.GetPointAttributeAccessor<float3>(AttributeID.Position, out var positionAccessor);
+            if (detail.TryGetPointAccessor<float3>(AttributeID.Position, out var positionAccessor) != CoreResult.Success)
+                return;
 
             var initialColor = Gizmos.color;
             Gizmos.color = lineColor;
 
-            // Get all valid primitives
-            var validPrimitives = new NativeList<int>(Allocator.Temp);
+            using var validPrimitives = new NativeList<int>(Allocator.Temp);
             detail.GetAllValidPrimitives(validPrimitives);
 
             for (int i = 0; i < validPrimitives.Length; i++)
             {
-                int primIndex = validPrimitives[i];
-                
-                // Get primitive vertex indices
-                var primVertices = detail.GetPrimitiveVertices(primIndex);
+                int primitiveIndex = validPrimitives[i];
+                var primVertices = detail.GetPrimitiveVertices(primitiveIndex);
                 if (primVertices.Length < 2)
                     continue;
 
-                // Draw lines connecting consecutive vertices
                 for (int v = 0; v < primVertices.Length; v++)
                 {
                     int currentVertexIndex = primVertices[v];
-                    int nextVertexIndex = primVertices[(v + 1) % primVertices.Length]; // Wrap around to first vertex
-                    
+                    int nextVertexIndex = primVertices[(v + 1) % primVertices.Length];
+
                     int currentPointIndex = detail.GetVertexPoint(currentVertexIndex);
                     int nextPointIndex = detail.GetVertexPoint(nextVertexIndex);
-                    
-                    if (currentPointIndex >= 0 && nextPointIndex >= 0)
-                    {
-                        float3 currentPos = positionAccessor[currentPointIndex];
-                        float3 nextPos = positionAccessor[nextPointIndex];
-                        
-                        Gizmos.DrawLine(currentPos, nextPos);
-                    }
+                    if (currentPointIndex < 0 || nextPointIndex < 0)
+                        continue;
+
+                    float3 currentPos = positionAccessor[currentPointIndex];
+                    float3 nextPos = positionAccessor[nextPointIndex];
+                    Gizmos.DrawLine(currentPos, nextPos);
                 }
             }
 
-            validPrimitives.Dispose();
             Gizmos.color = initialColor;
         }
     }

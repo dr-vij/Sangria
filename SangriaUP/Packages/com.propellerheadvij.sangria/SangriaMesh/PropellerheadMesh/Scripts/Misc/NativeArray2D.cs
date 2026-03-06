@@ -3,8 +3,37 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 
-namespace PropellerheadMesh
+namespace SangriaMesh
 {
+    public struct PageInfo
+    {
+        public int StartIndex;
+        public int DataLength;
+        public int Capacity;
+    }
+
+    public struct ActivePageEnumerator
+    {
+        private NativeList<PageInfo> m_ActivePages;
+        private int m_CurrentIndex;
+
+        public ActivePageEnumerator(NativeList<PageInfo> activePages)
+        {
+            m_ActivePages = activePages;
+            m_CurrentIndex = -1;
+        }
+
+        public bool MoveNext()
+        {
+            m_CurrentIndex++;
+            return m_CurrentIndex < m_ActivePages.Length;
+        }
+
+        public PageInfo CurrentPageInfo => m_ActivePages[m_CurrentIndex];
+        public int CurrentIndex => m_CurrentIndex;
+        public ActivePageEnumerator GetEnumerator() => this;
+    }
+
     [NativeContainer]
     public struct NativeArray2D<T> : IDisposable where T : unmanaged
     {
@@ -62,9 +91,7 @@ namespace PropellerheadMesh
             m_LastRecordIndex = m_Pages.Length - 1;
 
             for (int i = 0; i < actualPageSize; i++)
-            {
-                m_DataRecords.Add(default(T));
-            }
+                m_DataRecords.Add(default);
 
             return m_LastRecordIndex;
         }
@@ -75,17 +102,13 @@ namespace PropellerheadMesh
 
             if (page.DataLength >= page.Capacity)
             {
-                var newCapacity = page.Capacity + m_DefaultPageSize;
-
+                page.Capacity += m_DefaultPageSize;
                 for (int i = 0; i < m_DefaultPageSize; i++)
                     m_DataRecords.Add(default);
-
-                page.Capacity = newCapacity;
             }
 
             var elementIndex = page.StartIndex + page.DataLength;
             m_DataRecords[elementIndex] = element;
-
             page.DataLength++;
             m_Pages[m_LastRecordIndex] = page;
         }
@@ -93,10 +116,8 @@ namespace PropellerheadMesh
         public int AddArray(NativeArray<T> rowData)
         {
             int recordIndex = CreateArrayRecord();
-
             for (int i = 0; i < rowData.Length; i++)
                 Append(rowData[i]);
-
             return recordIndex;
         }
 
@@ -111,10 +132,8 @@ namespace PropellerheadMesh
             {
                 var elementIndex = page.StartIndex + page.DataLength;
                 m_DataRecords[elementIndex] = element;
-
                 page.DataLength++;
                 m_Pages[recordIndex] = page;
-
                 return true;
             }
 
@@ -139,9 +158,7 @@ namespace PropellerheadMesh
             page.DataLength++;
             page.Capacity = newCapacity;
             m_Pages[recordIndex] = page;
-
             m_LastRecordIndex = recordIndex;
-
             return true;
         }
 
@@ -151,7 +168,6 @@ namespace PropellerheadMesh
                 return false;
 
             var page = m_Pages[pageIndex];
-
             if (elementIndex < 0 || elementIndex >= page.DataLength)
                 return false;
 
@@ -183,12 +199,7 @@ namespace PropellerheadMesh
             var page = m_Pages[rowIndex];
             return m_DataRecords.AsArray().GetSubArray(page.StartIndex, page.DataLength);
         }
-        
-        /// <summary>
-        /// Creates a complete copy of this NativeArray2D with all pages and data
-        /// </summary>
-        /// <param name="allocator">The allocator to use for the new copy</param>
-        /// <returns>A new NativeArray2D containing all the same data</returns>
+
         public NativeArray2D<T> GetCopy(Allocator allocator = Allocator.Persistent)
         {
             var copy = new NativeArray2D<T>(m_Pages.Length, m_DefaultPageSize, allocator);
@@ -201,10 +212,12 @@ namespace PropellerheadMesh
                     var element = m_DataRecords[originalPage.StartIndex + j];
                     copy.m_DataRecords[copy.m_Pages[newRecordIndex].StartIndex + j] = element;
                 }
+
                 var copiedPage = copy.m_Pages[newRecordIndex];
                 copiedPage.DataLength = originalPage.DataLength;
                 copy.m_Pages[newRecordIndex] = copiedPage;
             }
+
             copy.m_LastRecordIndex = m_LastRecordIndex;
             return copy;
         }
@@ -221,8 +234,6 @@ namespace PropellerheadMesh
             dependencies = m_DataRecords.Dispose(dependencies);
             return dependencies;
         }
-
-        #region Managed Implementations
 
         public int AddArray(T[] rowData)
         {
@@ -245,7 +256,5 @@ namespace PropellerheadMesh
                 action(i, slice);
             }
         }
-
-        #endregion
     }
 }
