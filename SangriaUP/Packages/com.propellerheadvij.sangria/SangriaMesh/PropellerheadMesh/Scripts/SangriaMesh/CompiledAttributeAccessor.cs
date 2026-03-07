@@ -17,7 +17,11 @@ namespace SangriaMesh
             m_Count = count;
         }
 
-        public int Length => m_Count;
+        public int Length
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => m_Count;
+        }
 
         public ref T this[int index]
         {
@@ -40,6 +44,7 @@ namespace SangriaMesh
             return (T*)(m_BasePtr + index * m_Stride);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T* GetBasePointer() => (T*)m_BasePtr;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

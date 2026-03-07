@@ -19,6 +19,7 @@ namespace SangriaMesh
         public int PointCount;
         public int VertexCount;
         public int PrimitiveCount;
+        public bool IsTriangleOnlyTopology;
 
         internal NativeCompiledDetail(
             NativeArray<int> vertexToPointDense,
@@ -30,7 +31,8 @@ namespace SangriaMesh
             CompiledResourceSet resources,
             int pointCount,
             int vertexCount,
-            int primitiveCount)
+            int primitiveCount,
+            bool isTriangleOnlyTopology)
         {
             VertexToPointDense = vertexToPointDense;
             PrimitiveOffsetsDense = primitiveOffsetsDense;
@@ -44,6 +46,7 @@ namespace SangriaMesh
             PointCount = pointCount;
             VertexCount = vertexCount;
             PrimitiveCount = primitiveCount;
+            IsTriangleOnlyTopology = isTriangleOnlyTopology;
 
             m_IsDisposed = false;
         }

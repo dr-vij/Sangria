@@ -99,7 +99,8 @@ namespace SangriaMesh
                 return false;
 
             m_Alive.Set(index, false);
-            m_Generations[index] = NextGeneration(m_Generations[index]);
+            uint generation = m_Generations[index] + 1u;
+            m_Generations[index] = generation == 0 ? 1u : generation;
             m_FreeIndices.Add(index);
             m_Count--;
             return true;
@@ -192,12 +193,6 @@ namespace SangriaMesh
             m_IsDisposed = true;
         }
 
-        private static uint NextGeneration(uint current)
-        {
-            uint next = current + 1;
-            return next == 0 ? 1 : next;
-        }
-
         private void WriteGenerationRange(int start, int count, uint value)
         {
             if (count <= 0)
@@ -218,8 +213,11 @@ namespace SangriaMesh
             for (int i = 0; i < count; i++)
             {
                 uint generation = ptr[i];
-                if (generation != 0)
-                    ptr[i] = NextGeneration(generation);
+                if (generation == 0)
+                    continue;
+
+                generation += 1u;
+                ptr[i] = generation == 0 ? 1u : generation;
             }
         }
 

@@ -9,6 +9,9 @@ namespace SangriaMesh
 {
     public static class SangriaMeshSphereGenerator
     {
+        private const int ParallelRingThreshold = 8;
+        private const int ParallelPrimitiveThreshold = 4096;
+
         public static NativeDetail CreateUvSphere(
             float radius,
             int longitudeSegments,
@@ -63,22 +66,61 @@ namespace SangriaMesh
 
             unsafe
             {
-                var buildJob = new SphereDenseBuildJob
-                {
-                    Radius = radius,
-                    LongitudeSegments = longitudeSegments,
-                    LatitudeSegments = latitudeSegments,
-                    InteriorRingCount = interiorRingCount,
-                    RingVertexStride = longitudeSegments + 1,
-                    PointPositionPtr = pointPositionAccessor.GetBasePointer(),
-                    PointNormalPtr = pointNormalAccessor.GetBasePointer(),
-                    VertexNormalPtr = vertexNormalAccessor.GetBasePointer(),
-                    VertexUvPtr = vertexUvAccessor.GetBasePointer(),
-                    VertexToPointPtr = detail.GetVertexToPointPointerUnchecked(),
-                    PrimitiveDataPtr = detail.GetPrimitiveTriangleDataPointerUnchecked()
-                };
+                float3* pointPositionPtr = pointPositionAccessor.GetBasePointer();
+                float3* pointNormalPtr = pointNormalAccessor.GetBasePointer();
+                float3* vertexNormalPtr = vertexNormalAccessor.GetBasePointer();
+                float2* vertexUvPtr = vertexUvAccessor.GetBasePointer();
+                int* vertexToPointPtr = detail.GetVertexToPointPointerUnchecked();
+                int* primitiveDataPtr = detail.GetPrimitiveTriangleDataPointerUnchecked();
 
-                buildJob.Run();
+                if (ShouldUseParallelBuild(interiorRingCount, primitiveCount))
+                {
+                    InitializePoleData(radius, pointPositionPtr, pointNormalPtr, vertexNormalPtr, vertexUvPtr, vertexToPointPtr);
+
+                    var ringJob = new SphereInteriorRingBuildJob
+                    {
+                        Radius = radius,
+                        LongitudeSegments = longitudeSegments,
+                        LatitudeSegments = latitudeSegments,
+                        RingVertexStride = longitudeSegments + 1,
+                        PointPositionPtr = pointPositionPtr,
+                        PointNormalPtr = pointNormalPtr,
+                        VertexNormalPtr = vertexNormalPtr,
+                        VertexUvPtr = vertexUvPtr,
+                        VertexToPointPtr = vertexToPointPtr
+                    };
+
+                    var triangleJob = new SpherePrimitiveBuildJob
+                    {
+                        LongitudeSegments = longitudeSegments,
+                        InteriorRingCount = interiorRingCount,
+                        RingVertexStride = longitudeSegments + 1,
+                        PrimitiveDataPtr = primitiveDataPtr
+                    };
+
+                    JobHandle ringHandle = ringJob.Schedule(interiorRingCount, 1);
+                    JobHandle triangleHandle = triangleJob.Schedule(primitiveCount, 128);
+                    JobHandle.CombineDependencies(ringHandle, triangleHandle).Complete();
+                }
+                else
+                {
+                    var buildJob = new SphereDenseBuildJob
+                    {
+                        Radius = radius,
+                        LongitudeSegments = longitudeSegments,
+                        LatitudeSegments = latitudeSegments,
+                        InteriorRingCount = interiorRingCount,
+                        RingVertexStride = longitudeSegments + 1,
+                        PointPositionPtr = pointPositionPtr,
+                        PointNormalPtr = pointNormalPtr,
+                        VertexNormalPtr = vertexNormalPtr,
+                        VertexUvPtr = vertexUvPtr,
+                        VertexToPointPtr = vertexToPointPtr,
+                        PrimitiveDataPtr = primitiveDataPtr
+                    };
+
+                    buildJob.Run();
+                }
             }
 
             detail.MarkTopologyAndAttributeChanged();
@@ -219,6 +261,160 @@ namespace SangriaMesh
                 PrimitiveDataPtr[triStart + 1] = v1;
                 PrimitiveDataPtr[triStart + 2] = v2;
             }
+        }
+
+        [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Low, CompileSynchronously = true)]
+        private unsafe struct SphereInteriorRingBuildJob : IJobParallelFor
+        {
+            public float Radius;
+            public int LongitudeSegments;
+            public int LatitudeSegments;
+            public int RingVertexStride;
+
+            [NativeDisableUnsafePtrRestriction] public float3* PointPositionPtr;
+            [NativeDisableUnsafePtrRestriction] public float3* PointNormalPtr;
+            [NativeDisableUnsafePtrRestriction] public float3* VertexNormalPtr;
+            [NativeDisableUnsafePtrRestriction] public float2* VertexUvPtr;
+            [NativeDisableUnsafePtrRestriction] public int* VertexToPointPtr;
+
+            public void Execute(int ring)
+            {
+                float v = (float)(ring + 1) / LatitudeSegments;
+                float phi = v * math.PI;
+                math.sincos(phi, out float sinPhi, out float cosPhi);
+
+                int pointRingStart = 2 + ring * LongitudeSegments;
+                int vertexRingStart = 2 + ring * RingVertexStride;
+                float invLongitude = 1f / LongitudeSegments;
+                float deltaTheta = 2f * math.PI * invLongitude;
+                math.sincos(deltaTheta, out float sinDelta, out float cosDelta);
+
+                float s = 0f;
+                float c = 1f;
+
+                for (int lon = 0; lon < LongitudeSegments; lon++)
+                {
+                    int pointIndex = pointRingStart + lon;
+                    int vertexIndex = vertexRingStart + lon;
+
+                    float3 normal = new float3(c * sinPhi, cosPhi, s * sinPhi);
+                    PointPositionPtr[pointIndex] = normal * Radius;
+                    PointNormalPtr[pointIndex] = normal;
+
+                    VertexToPointPtr[vertexIndex] = pointIndex;
+                    VertexNormalPtr[vertexIndex] = normal;
+                    VertexUvPtr[vertexIndex] = new float2(lon * invLongitude, v);
+
+                    float nextS = s * cosDelta + c * sinDelta;
+                    float nextC = c * cosDelta - s * sinDelta;
+                    s = nextS;
+                    c = nextC;
+                }
+
+                int seamVertexIndex = vertexRingStart + LongitudeSegments;
+                VertexToPointPtr[seamVertexIndex] = pointRingStart;
+                VertexNormalPtr[seamVertexIndex] = PointNormalPtr[pointRingStart];
+                VertexUvPtr[seamVertexIndex] = new float2(1f, v);
+            }
+        }
+
+        [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Low, CompileSynchronously = true)]
+        private unsafe struct SpherePrimitiveBuildJob : IJobParallelFor
+        {
+            public int LongitudeSegments;
+            public int InteriorRingCount;
+            public int RingVertexStride;
+
+            [NativeDisableUnsafePtrRestriction] public int* PrimitiveDataPtr;
+
+            public void Execute(int primitiveIndex)
+            {
+                const int northPoleVertex = 0;
+                const int southPoleVertex = 1;
+
+                int topCount = LongitudeSegments;
+                int middleCount = (InteriorRingCount - 1) * LongitudeSegments * 2;
+
+                if (primitiveIndex < topCount)
+                {
+                    int lon = primitiveIndex;
+                    int current = 2 + lon;
+                    int next = current + 1;
+                    WriteTriangle(primitiveIndex, northPoleVertex, next, current);
+                    return;
+                }
+
+                int middleStart = topCount;
+                int middleEnd = middleStart + middleCount;
+                if (primitiveIndex < middleEnd)
+                {
+                    int local = primitiveIndex - middleStart;
+                    int pairStride = LongitudeSegments * 2;
+                    int ring = local / pairStride;
+                    int inRing = local - ring * pairStride;
+                    int lon = inRing >> 1;
+                    bool secondTri = (inRing & 1) != 0;
+
+                    int ringStart = 2 + ring * RingVertexStride;
+                    int nextRingStart = ringStart + RingVertexStride;
+                    int a = ringStart + lon;
+                    int b = a + 1;
+                    int c = nextRingStart + lon;
+                    int d = c + 1;
+
+                    if (secondTri)
+                        WriteTriangle(primitiveIndex, a, b, d);
+                    else
+                        WriteTriangle(primitiveIndex, a, d, c);
+
+                    return;
+                }
+
+                int bottomLon = primitiveIndex - middleEnd;
+                int lastRingStart = 2 + (InteriorRingCount - 1) * RingVertexStride;
+                int currentBottom = lastRingStart + bottomLon;
+                int nextBottom = currentBottom + 1;
+                WriteTriangle(primitiveIndex, southPoleVertex, currentBottom, nextBottom);
+            }
+
+            private void WriteTriangle(int primitiveIndex, int v0, int v1, int v2)
+            {
+                int triStart = primitiveIndex * 3;
+                PrimitiveDataPtr[triStart] = v0;
+                PrimitiveDataPtr[triStart + 1] = v1;
+                PrimitiveDataPtr[triStart + 2] = v2;
+            }
+        }
+
+        private static bool ShouldUseParallelBuild(int interiorRingCount, int primitiveCount)
+        {
+            return interiorRingCount >= ParallelRingThreshold && primitiveCount >= ParallelPrimitiveThreshold;
+        }
+
+        private static unsafe void InitializePoleData(
+            float radius,
+            float3* pointPositionPtr,
+            float3* pointNormalPtr,
+            float3* vertexNormalPtr,
+            float2* vertexUvPtr,
+            int* vertexToPointPtr)
+        {
+            const int northPolePoint = 0;
+            const int southPolePoint = 1;
+            const int northPoleVertex = 0;
+            const int southPoleVertex = 1;
+
+            pointPositionPtr[northPolePoint] = new float3(0f, radius, 0f);
+            pointPositionPtr[southPolePoint] = new float3(0f, -radius, 0f);
+            pointNormalPtr[northPolePoint] = new float3(0f, 1f, 0f);
+            pointNormalPtr[southPolePoint] = new float3(0f, -1f, 0f);
+
+            vertexToPointPtr[northPoleVertex] = northPolePoint;
+            vertexToPointPtr[southPoleVertex] = southPolePoint;
+            vertexNormalPtr[northPoleVertex] = pointNormalPtr[northPolePoint];
+            vertexNormalPtr[southPoleVertex] = pointNormalPtr[southPolePoint];
+            vertexUvPtr[northPoleVertex] = new float2(0.5f, 0f);
+            vertexUvPtr[southPoleVertex] = new float2(0.5f, 1f);
         }
 
         private static void ValidateInputs(float radius, int longitudeSegments, int latitudeSegments)

@@ -136,28 +136,36 @@ namespace SangriaMesh
                 float3* pointNormalsPtr = hasPointNormals ? pointNormals.GetBasePointer() : null;
                 float3* vertexNormalsPtr = hasVertexNormals ? vertexNormals.GetBasePointer() : null;
                 float2* vertexUv0Ptr = hasVertexUv0 ? vertexUv0.GetBasePointer() : null;
+                int pointCount = pointPositions.Length;
 
-                float3 boundsMin = default;
-                float3 boundsMax = default;
+                float minX = 0f, minY = 0f, minZ = 0f;
+                float maxX = 0f, maxY = 0f, maxZ = 0f;
                 bool hasBounds = false;
 
                 for (int vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
                 {
                     int pointIndex = vertexToPointPtr[vertexIndex];
-                    bool pointIndexValid = (uint)pointIndex < (uint)pointPositions.Length;
+                    bool pointIndexValid = (uint)pointIndex < (uint)pointCount;
                     float3 position = pointIndexValid ? pointPositionsPtr[pointIndex] : default;
                     positionDst[vertexIndex] = position;
 
                     if (!hasBounds)
                     {
-                        boundsMin = position;
-                        boundsMax = position;
+                        minX = maxX = position.x;
+                        minY = maxY = position.y;
+                        minZ = maxZ = position.z;
                         hasBounds = true;
                     }
                     else
                     {
-                        boundsMin = math.min(boundsMin, position);
-                        boundsMax = math.max(boundsMax, position);
+                        if (position.x < minX) minX = position.x;
+                        else if (position.x > maxX) maxX = position.x;
+
+                        if (position.y < minY) minY = position.y;
+                        else if (position.y > maxY) maxY = position.y;
+
+                        if (position.z < minZ) minZ = position.z;
+                        else if (position.z > maxZ) maxZ = position.z;
                     }
 
                     if (hasNormals)
@@ -195,13 +203,13 @@ namespace SangriaMesh
                     bounds = hasBounds
                         ? new Bounds(
                             new Vector3(
-                                (boundsMin.x + boundsMax.x) * 0.5f,
-                                (boundsMin.y + boundsMax.y) * 0.5f,
-                                (boundsMin.z + boundsMax.z) * 0.5f),
+                                (minX + maxX) * 0.5f,
+                                (minY + maxY) * 0.5f,
+                                (minZ + maxZ) * 0.5f),
                             new Vector3(
-                                boundsMax.x - boundsMin.x,
-                                boundsMax.y - boundsMin.y,
-                                boundsMax.z - boundsMin.z))
+                                maxX - minX,
+                                maxY - minY,
+                                maxZ - minZ))
                         : new Bounds(Vector3.zero, Vector3.zero)
                 };
 
@@ -225,6 +233,12 @@ namespace SangriaMesh
             if (mesh == null)
                 throw new ArgumentNullException(nameof(mesh));
 
+            if (assumeTriangleTopology || IsTriangleOnlyTopology(compiled))
+            {
+                FillUnityMeshTrianglesMeshData(compiled, mesh);
+                return;
+            }
+
             mesh.Clear();
 
             if (compiled.VertexCount <= 0 || compiled.PrimitiveCount <= 0)
@@ -239,174 +253,201 @@ namespace SangriaMesh
                 compiled.TryGetAttributeAccessor<float3>(MeshDomain.Point, AttributeID.Normal, out var pointNormals) == CoreResult.Success;
             bool hasVertexUv0 =
                 compiled.TryGetAttributeAccessor<float2>(MeshDomain.Vertex, AttributeID.UV0, out var vertexUv0) == CoreResult.Success;
+            int pointCount = pointPositions.Length;
 
-            Vector3[] vertices = new Vector3[compiled.VertexCount];
-            Vector3[] normals = (hasVertexNormals || hasPointNormals) ? new Vector3[compiled.VertexCount] : null;
-            Vector2[] uv0 = hasVertexUv0 ? new Vector2[compiled.VertexCount] : null;
-            Vector3 boundsMin = default;
-            Vector3 boundsMax = default;
-            bool hasBounds = false;
-
-            int* vertexToPointPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(compiled.VertexToPointDense);
-            float3* pointPositionsPtr = pointPositions.GetBasePointer();
-            float3* pointNormalsPtr = hasPointNormals ? pointNormals.GetBasePointer() : null;
-            float3* vertexNormalsPtr = hasVertexNormals ? vertexNormals.GetBasePointer() : null;
-            float2* vertexUv0Ptr = hasVertexUv0 ? vertexUv0.GetBasePointer() : null;
-
-            for (int vertexIndex = 0; vertexIndex < compiled.VertexCount; vertexIndex++)
+            int triangleIndexCount = 0;
+            for (int primitiveIndex = 0; primitiveIndex < compiled.PrimitiveCount; primitiveIndex++)
             {
-                int pointIndex = vertexToPointPtr[vertexIndex];
-                bool pointIndexValid = (uint)pointIndex < (uint)pointPositions.Length;
-                if (pointIndexValid)
+                int start = compiled.PrimitiveOffsetsDense[primitiveIndex];
+                int end = compiled.PrimitiveOffsetsDense[primitiveIndex + 1];
+                int primitiveVertexCount = end - start;
+
+                if (primitiveVertexCount >= 3)
+                    triangleIndexCount += (primitiveVertexCount - 2) * 3;
+            }
+
+            int[] triangles = new int[triangleIndexCount];
+            int triangleWriteIndex = 0;
+            var primitiveVertices = new List<int>(16);
+            var primitivePositions = new List<float3>(16);
+            var projectedPolygon = new List<float2>(16);
+            var polygonOrder = new List<int>(16);
+
+            for (int primitiveIndex = 0; primitiveIndex < compiled.PrimitiveCount; primitiveIndex++)
+            {
+                int start = compiled.PrimitiveOffsetsDense[primitiveIndex];
+                int end = compiled.PrimitiveOffsetsDense[primitiveIndex + 1];
+                int primitiveVertexCount = end - start;
+
+                if (primitiveVertexCount < 3)
+                    continue;
+
+                if (primitiveVertexCount == 3)
                 {
-                    float3 p = pointPositionsPtr[pointIndex];
-                    vertices[vertexIndex] = new Vector3(p.x, p.y, p.z);
-                }
-                else
-                {
-                    vertices[vertexIndex] = default;
+                    triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start];
+                    triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start + 1];
+                    triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start + 2];
+                    continue;
                 }
 
-                Vector3 vertexPosition = vertices[vertexIndex];
-                if (!hasBounds)
-                {
-                    boundsMin = vertexPosition;
-                    boundsMax = vertexPosition;
-                    hasBounds = true;
-                }
-                else
-                {
-                    boundsMin = Vector3.Min(boundsMin, vertexPosition);
-                    boundsMax = Vector3.Max(boundsMax, vertexPosition);
-                }
+                primitiveVertices.Clear();
+                primitivePositions.Clear();
 
-                if (normals != null)
+                bool hasInvalidPoint = false;
+                for (int i = 0; i < primitiveVertexCount; i++)
                 {
-                    if (hasVertexNormals)
+                    int vertexIndex = compiled.PrimitiveVerticesDense[start + i];
+                    primitiveVertices.Add(vertexIndex);
+
+                    int pointIndex = compiled.VertexToPointDense[vertexIndex];
+                    if ((uint)pointIndex < (uint)pointCount)
                     {
-                        float3 n = vertexNormalsPtr[vertexIndex];
-                        normals[vertexIndex] = new Vector3(n.x, n.y, n.z);
+                        primitivePositions.Add(pointPositions[pointIndex]);
                     }
                     else
                     {
-                        if (pointIndexValid)
-                        {
-                            float3 n = pointNormalsPtr[pointIndex];
-                            normals[vertexIndex] = new Vector3(n.x, n.y, n.z);
-                        }
-                        else
-                        {
-                            normals[vertexIndex] = default;
-                        }
+                        hasInvalidPoint = true;
+                        primitivePositions.Add(default);
                     }
                 }
 
-                if (uv0 != null)
+                if (hasInvalidPoint || !TryBuildProjectedPolygon(primitivePositions, projectedPolygon))
                 {
-                    float2 uv = vertexUv0Ptr[vertexIndex];
-                    uv0[vertexIndex] = new Vector2(uv.x, uv.y);
+                    triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, triangleWriteIndex);
+                    continue;
                 }
+
+                if (!TryTriangulateEarClip(primitiveVertices, projectedPolygon, polygonOrder, triangles, ref triangleWriteIndex))
+                    triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, triangleWriteIndex);
             }
 
-            int[] triangles;
-            bool triangleOnlyTopology = assumeTriangleTopology || IsTriangleOnlyTopology(compiled);
-            if (triangleOnlyTopology)
+            int vertexCount = compiled.VertexCount;
+            int indexCount = triangles.Length;
+            bool hasNormals = hasVertexNormals || hasPointNormals;
+            IndexFormat indexFormat = vertexCount > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
+            var layout = ResolveTriangleVertexLayout(hasNormals, hasVertexUv0);
+
+            var meshDataArray = Mesh.AllocateWritableMeshData(1);
+            bool meshDataApplied = false;
+            try
             {
-                triangles = new int[compiled.PrimitiveVerticesDense.Length];
-                fixed (int* dst = triangles)
+                var meshData = meshDataArray[0];
+                meshData.SetVertexBufferParams(vertexCount, layout);
+                meshData.SetIndexBufferParams(indexCount, indexFormat);
+
+                var positionData = meshData.GetVertexData<float3>(0);
+                float3* positionDst = (float3*)NativeArrayUnsafeUtility.GetUnsafePtr(positionData);
+
+                float3* normalDst = null;
+                if (hasNormals)
                 {
-                    UnsafeUtility.MemCpy(
-                        dst,
-                        NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(compiled.PrimitiveVerticesDense),
-                        triangles.Length * UnsafeUtility.SizeOf<int>());
+                    var normalData = meshData.GetVertexData<float3>(1);
+                    normalDst = (float3*)NativeArrayUnsafeUtility.GetUnsafePtr(normalData);
                 }
+
+                float2* uvDst = null;
+                if (hasVertexUv0)
+                {
+                    int uvStream = hasNormals ? 2 : 1;
+                    var uvData = meshData.GetVertexData<float2>(uvStream);
+                    uvDst = (float2*)NativeArrayUnsafeUtility.GetUnsafePtr(uvData);
+                }
+
+                int* vertexToPointPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(compiled.VertexToPointDense);
+                float3* pointPositionsPtr = pointPositions.GetBasePointer();
+                float3* pointNormalsPtr = hasPointNormals ? pointNormals.GetBasePointer() : null;
+                float3* vertexNormalsPtr = hasVertexNormals ? vertexNormals.GetBasePointer() : null;
+                float2* vertexUv0Ptr = hasVertexUv0 ? vertexUv0.GetBasePointer() : null;
+
+                float minX = 0f, minY = 0f, minZ = 0f;
+                float maxX = 0f, maxY = 0f, maxZ = 0f;
+                bool hasBounds = false;
+
+                for (int vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
+                {
+                    int pointIndex = vertexToPointPtr[vertexIndex];
+                    bool pointIndexValid = (uint)pointIndex < (uint)pointCount;
+                    float3 position = pointIndexValid ? pointPositionsPtr[pointIndex] : default;
+                    positionDst[vertexIndex] = position;
+
+                    if (!hasBounds)
+                    {
+                        minX = maxX = position.x;
+                        minY = maxY = position.y;
+                        minZ = maxZ = position.z;
+                        hasBounds = true;
+                    }
+                    else
+                    {
+                        if (position.x < minX) minX = position.x;
+                        else if (position.x > maxX) maxX = position.x;
+
+                        if (position.y < minY) minY = position.y;
+                        else if (position.y > maxY) maxY = position.y;
+
+                        if (position.z < minZ) minZ = position.z;
+                        else if (position.z > maxZ) maxZ = position.z;
+                    }
+
+                    if (hasNormals)
+                    {
+                        normalDst[vertexIndex] = hasVertexNormals
+                            ? vertexNormalsPtr[vertexIndex]
+                            : (pointIndexValid ? pointNormalsPtr[pointIndex] : default);
+                    }
+
+                    if (hasVertexUv0)
+                        uvDst[vertexIndex] = vertexUv0Ptr[vertexIndex];
+                }
+
+                if (indexFormat == IndexFormat.UInt32)
+                {
+                    var indexData = meshData.GetIndexData<int>();
+                    fixed (int* indexSrc = triangles)
+                    {
+                        UnsafeUtility.MemCpy(
+                            NativeArrayUnsafeUtility.GetUnsafePtr(indexData),
+                            indexSrc,
+                            indexCount * UnsafeUtility.SizeOf<int>());
+                    }
+                }
+                else
+                {
+                    var indexData = meshData.GetIndexData<ushort>();
+                    ushort* indexDst = (ushort*)NativeArrayUnsafeUtility.GetUnsafePtr(indexData);
+                    for (int i = 0; i < indexCount; i++)
+                        indexDst[i] = (ushort)triangles[i];
+                }
+
+                meshData.subMeshCount = 1;
+                var subMeshDescriptor = new SubMeshDescriptor(0, indexCount, MeshTopology.Triangles)
+                {
+                    bounds = hasBounds
+                        ? new Bounds(
+                            new Vector3(
+                                (minX + maxX) * 0.5f,
+                                (minY + maxY) * 0.5f,
+                                (minZ + maxZ) * 0.5f),
+                            new Vector3(
+                                maxX - minX,
+                                maxY - minY,
+                                maxZ - minZ))
+                        : new Bounds(Vector3.zero, Vector3.zero)
+                };
+
+                meshData.SetSubMesh(0, subMeshDescriptor, TriangleSetSubMeshFlags);
+                Mesh.ApplyAndDisposeWritableMeshData(meshDataArray, mesh, TriangleApplyFlags);
+                meshDataApplied = true;
+                mesh.bounds = subMeshDescriptor.bounds;
+                if (!hasNormals)
+                    mesh.RecalculateNormals();
             }
-            else
+            catch
             {
-                int triangleIndexCount = 0;
-                for (int primitiveIndex = 0; primitiveIndex < compiled.PrimitiveCount; primitiveIndex++)
-                {
-                    int start = compiled.PrimitiveOffsetsDense[primitiveIndex];
-                    int end = compiled.PrimitiveOffsetsDense[primitiveIndex + 1];
-                    int primitiveVertexCount = end - start;
-
-                    if (primitiveVertexCount >= 3)
-                        triangleIndexCount += (primitiveVertexCount - 2) * 3;
-                }
-
-                triangles = new int[triangleIndexCount];
-                int triangleWriteIndex = 0;
-                var primitiveVertices = new List<int>(16);
-                var primitivePositions = new List<float3>(16);
-                var projectedPolygon = new List<float2>(16);
-                var polygonOrder = new List<int>(16);
-
-                for (int primitiveIndex = 0; primitiveIndex < compiled.PrimitiveCount; primitiveIndex++)
-                {
-                    int start = compiled.PrimitiveOffsetsDense[primitiveIndex];
-                    int end = compiled.PrimitiveOffsetsDense[primitiveIndex + 1];
-                    int primitiveVertexCount = end - start;
-
-                    if (primitiveVertexCount < 3)
-                        continue;
-
-                    if (primitiveVertexCount == 3)
-                    {
-                        triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start];
-                        triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start + 1];
-                        triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start + 2];
-                        continue;
-                    }
-
-                    primitiveVertices.Clear();
-                    primitivePositions.Clear();
-
-                    bool hasInvalidPoint = false;
-                    for (int i = 0; i < primitiveVertexCount; i++)
-                    {
-                        int vertexIndex = compiled.PrimitiveVerticesDense[start + i];
-                        primitiveVertices.Add(vertexIndex);
-
-                        int pointIndex = compiled.VertexToPointDense[vertexIndex];
-                        if ((uint)pointIndex < (uint)pointPositions.Length)
-                        {
-                            primitivePositions.Add(pointPositions[pointIndex]);
-                        }
-                        else
-                        {
-                            hasInvalidPoint = true;
-                            primitivePositions.Add(default);
-                        }
-                    }
-
-                    if (hasInvalidPoint || !TryBuildProjectedPolygon(primitivePositions, projectedPolygon))
-                    {
-                        triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, triangleWriteIndex);
-                        continue;
-                    }
-
-                    if (!TryTriangulateEarClip(primitiveVertices, projectedPolygon, polygonOrder, triangles, ref triangleWriteIndex))
-                        triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, triangleWriteIndex);
-                }
+                if (!meshDataApplied)
+                    meshDataArray.Dispose();
+                throw;
             }
-
-            mesh.indexFormat = vertices.Length > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
-
-            mesh.vertices = vertices;
-            mesh.SetIndices(triangles, MeshTopology.Triangles, 0, false);
-
-            if (normals != null)
-                mesh.normals = normals;
-            else
-                mesh.RecalculateNormals();
-
-            if (uv0 != null)
-                mesh.uv = uv0;
-
-            if (hasBounds)
-                mesh.bounds = new Bounds((boundsMin + boundsMax) * 0.5f, boundsMax - boundsMin);
-            else
-                mesh.bounds = new Bounds(Vector3.zero, Vector3.zero);
         }
 
         private static VertexAttributeDescriptor[] ResolveTriangleVertexLayout(bool hasNormals, bool hasUv0)
@@ -419,16 +460,7 @@ namespace SangriaMesh
 
         private static bool IsTriangleOnlyTopology(NativeCompiledDetail compiled)
         {
-            if (compiled.PrimitiveVerticesDense.Length != compiled.PrimitiveCount * 3)
-                return false;
-
-            for (int primitiveIndex = 0; primitiveIndex < compiled.PrimitiveCount; primitiveIndex++)
-            {
-                if (compiled.PrimitiveOffsetsDense[primitiveIndex + 1] - compiled.PrimitiveOffsetsDense[primitiveIndex] != 3)
-                    return false;
-            }
-
-            return true;
+            return compiled.IsTriangleOnlyTopology;
         }
 
         /// <summary>

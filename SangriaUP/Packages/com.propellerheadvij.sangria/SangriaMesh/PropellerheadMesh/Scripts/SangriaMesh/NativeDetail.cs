@@ -579,6 +579,7 @@ namespace SangriaMesh
             }
 
             int totalPrimitiveVertexCount = m_PrimitiveStorage.TotalVertexCount;
+            bool triangleOnlyTopology = primitiveCount == 0;
 
             var primitiveOffsetsDense = new NativeArray<int>(primitiveCount + 1, allocator, NativeArrayOptions.UninitializedMemory);
             var primitiveVerticesDense = new NativeArray<int>(totalPrimitiveVertexCount, allocator, NativeArrayOptions.UninitializedMemory);
@@ -588,6 +589,7 @@ namespace SangriaMesh
             }
             else if (m_PrimitiveStorage.IsDenseTriangleLayout && totalPrimitiveVertexCount == primitiveCount * 3)
             {
+                triangleOnlyTopology = true;
                 int* offsetsPtr = (int*)NativeArrayUnsafeUtility.GetUnsafePtr(primitiveOffsetsDense);
                 for (int i = 0; i <= primitiveCount; i++)
                     offsetsPtr[i] = i * 3;
@@ -602,11 +604,14 @@ namespace SangriaMesh
             }
             else
             {
+                triangleOnlyTopology = true;
                 int runningOffset = 0;
                 for (int i = 0; i < primitiveCount; i++)
                 {
                     primitiveOffsetsDense[i] = runningOffset;
                     PrimitiveRecord record = m_PrimitiveStorage.GetRecordUnchecked(i);
+                    if (record.Length != 3)
+                        triangleOnlyTopology = false;
 
                     m_PrimitiveStorage.CopyVerticesUnchecked(record, primitiveVerticesDense, runningOffset);
                     runningOffset += record.Length;
@@ -630,7 +635,8 @@ namespace SangriaMesh
                 compiledResources,
                 pointCount,
                 vertexCount,
-                primitiveCount);
+                primitiveCount,
+                triangleOnlyTopology);
         }
 
         private NativeCompiledDetail CompileSparse(Allocator allocator)
@@ -676,6 +682,7 @@ namespace SangriaMesh
                 }
 
                 int totalPrimitiveVertexCount = 0;
+                bool triangleOnlyTopology = true;
                 for (int i = 0; i < primitiveCount; i++)
                 {
                     int sparsePrimitive = alivePrimitives[i];
@@ -690,6 +697,8 @@ namespace SangriaMesh
                     }
 
                     totalPrimitiveVertexCount += validCount;
+                    if (validCount != 3)
+                        triangleOnlyTopology = false;
                 }
 
                 var primitiveOffsetsDense = new NativeArray<int>(primitiveCount + 1, allocator, NativeArrayOptions.UninitializedMemory);
@@ -731,7 +740,8 @@ namespace SangriaMesh
                     compiledResources,
                     pointCount,
                     vertexCount,
-                    primitiveCount);
+                    primitiveCount,
+                    triangleOnlyTopology);
             }
             finally
             {
