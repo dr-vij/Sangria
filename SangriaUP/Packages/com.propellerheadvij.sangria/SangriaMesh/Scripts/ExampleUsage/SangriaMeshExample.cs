@@ -119,11 +119,10 @@ public sealed class SangriaMeshExample : MonoBehaviour
     {
         if (!m_DrawPreview)
             return;
-        if (Application.isPlaying && m_RunRealtimeBake)
+        if (Application.isPlaying)
             return;
 
-        NativeDetail detail;
-        CreateSphereWithPrecomputedNormalsAndUv(out detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.Temp);
+        CreateSphereWithPrecomputedNormalsAndUv(out var detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.Temp);
 
         try
         {
@@ -145,8 +144,7 @@ public sealed class SangriaMeshExample : MonoBehaviour
     [ContextMenu("Build SangriaMesh Sphere And Convert To Unity Mesh")]
     private void BuildSphereAndConvertToUnityMesh()
     {
-        NativeDetail detail;
-        CreateSphereWithPrecomputedNormalsAndUv(out detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.Temp);
+        CreateSphereWithPrecomputedNormalsAndUv(out var detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.Temp);
 
         Mesh unityMesh = null;
         try
@@ -247,6 +245,6 @@ public sealed class SangriaMeshExample : MonoBehaviour
 
     private static double TicksToMilliseconds(long ticks)
     {
-        return (double)ticks * 1000.0 / Stopwatch.Frequency;
+        return ticks * 1000.0 / Stopwatch.Frequency;
     }
 }
