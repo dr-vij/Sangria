@@ -119,26 +119,45 @@ public sealed class SangriaMeshExample : MonoBehaviour
     {
         if (!m_DrawPreview)
             return;
-        if (Application.isPlaying)
-            return;
 
-        CreateSphereWithPrecomputedNormalsAndUv(out var detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.Temp);
+        var initialMatrix = Gizmos.matrix;
+        Gizmos.matrix = transform.localToWorldMatrix;
 
         try
         {
-            if (m_DrawWireframe)
-                detail.DrawPrimitiveLines(m_WireColor);
+            if (Application.isPlaying && m_RuntimeDetailCreated)
+            {
+                DrawPreview(m_RuntimeDetail);
+                return;
+            }
 
-            if (m_DrawPoints)
-                detail.DrawPointGizmos(m_PointSize, m_PointColor);
+            CreateSphereWithPrecomputedNormalsAndUv(out var detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.Temp);
 
-            if (m_DrawNormals)
-                detail.DrawVertexNormalsGizmos(m_NormalLength, m_NormalColor);
+            try
+            {
+                DrawPreview(detail);
+            }
+            finally
+            {
+                detail.Dispose();
+            }
         }
         finally
         {
-            detail.Dispose();
+            Gizmos.matrix = initialMatrix;
         }
+    }
+
+    private void DrawPreview(NativeDetail detail)
+    {
+        if (m_DrawWireframe)
+            detail.DrawPrimitiveLines(m_WireColor);
+
+        if (m_DrawPoints)
+            detail.DrawPointGizmos(m_PointSize, m_PointColor);
+
+        if (m_DrawNormals)
+            detail.DrawVertexNormalsGizmos(m_NormalLength, m_NormalColor);
     }
 
     [ContextMenu("Build SangriaMesh Sphere And Convert To Unity Mesh")]
