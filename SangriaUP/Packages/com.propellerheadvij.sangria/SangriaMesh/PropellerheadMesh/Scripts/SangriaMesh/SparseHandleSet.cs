@@ -165,14 +165,11 @@ namespace SangriaMesh
 
         public void Clear()
         {
-            for (int i = 0; i < m_NextUnusedIndex; i++)
+            int usedCount = m_NextUnusedIndex;
+            if (usedCount > 0)
             {
-                if (m_Alive.IsSet(i))
-                    m_Alive.Set(i, false);
-
-                uint generation = m_Generations[i];
-                if (generation != 0)
-                    m_Generations[i] = NextGeneration(generation);
+                m_Alive.SetBits(0, false, usedCount);
+                IncrementGenerationRange(0, usedCount);
             }
 
             m_FreeIndices.Clear();
@@ -209,6 +206,21 @@ namespace SangriaMesh
             var generationsArray = m_Generations.AsArray();
             uint* dst = (uint*)NativeArrayUnsafeUtility.GetUnsafePtr(generationsArray) + start;
             UnsafeUtility.MemCpyReplicate(dst, &value, UnsafeUtility.SizeOf<uint>(), count);
+        }
+
+        private void IncrementGenerationRange(int start, int count)
+        {
+            if (count <= 0)
+                return;
+
+            var generationsArray = m_Generations.AsArray();
+            uint* ptr = (uint*)NativeArrayUnsafeUtility.GetUnsafePtr(generationsArray) + start;
+            for (int i = 0; i < count; i++)
+            {
+                uint generation = ptr[i];
+                if (generation != 0)
+                    ptr[i] = NextGeneration(generation);
+            }
         }
 
         private void ClearGenerationRange(int start, int count)

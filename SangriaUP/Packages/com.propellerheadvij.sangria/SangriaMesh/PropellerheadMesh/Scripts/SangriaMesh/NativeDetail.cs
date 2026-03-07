@@ -428,7 +428,12 @@ namespace SangriaMesh
             return m_PrimitiveStorage.GetDataPointerUnchecked();
         }
 
-        internal void AllocateDenseTopologyUnchecked(int pointCount, int vertexCount, int primitiveCount, bool prepareTriangleStorage)
+        internal void AllocateDenseTopologyUnchecked(
+            int pointCount,
+            int vertexCount,
+            int primitiveCount,
+            bool prepareTriangleStorage,
+            bool initializeVertexToPoint = true)
         {
             if (m_Points.Count != 0 || m_Vertices.Count != 0 || m_Primitives.Count != 0)
                 throw new InvalidOperationException("AllocateDenseTopologyUnchecked requires empty detail.");
@@ -450,7 +455,8 @@ namespace SangriaMesh
                     m_VertexAttributes.EnsureCapacity(m_Vertices.Capacity);
 
                 EnsureVertexToPointCapacity(vertexCount);
-                FillNativeListWithMinusOne(m_VertexToPoint, vertexCount);
+                if (initializeVertexToPoint)
+                    FillNativeListWithMinusOne(m_VertexToPoint, vertexCount);
             }
 
             if (primitiveCount > 0)
@@ -747,8 +753,7 @@ namespace SangriaMesh
             m_Primitives.Clear();
 
             m_PrimitiveStorage.Clear();
-            for (int i = 0; i < m_VertexToPoint.Length; i++)
-                m_VertexToPoint[i] = -1;
+            FillNativeListWithMinusOne(m_VertexToPoint, m_VertexToPoint.Length);
 
             m_Resources.Clear();
 

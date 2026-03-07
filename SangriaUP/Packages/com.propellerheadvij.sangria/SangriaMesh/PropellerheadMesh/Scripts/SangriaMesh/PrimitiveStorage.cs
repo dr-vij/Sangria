@@ -242,11 +242,13 @@ namespace SangriaMesh
 
         public void Clear()
         {
-            for (int i = 0; i < m_Records.Length; i++)
+            int recordCount = m_Records.Length;
+            if (recordCount > 0)
             {
-                var record = m_Records[i];
-                record.Length = 0;
-                m_Records[i] = record;
+                var recordsArray = m_Records.AsArray();
+                PrimitiveRecord* recordsPtr = (PrimitiveRecord*)NativeArrayUnsafeUtility.GetUnsafePtr(recordsArray);
+                for (int i = 0; i < recordCount; i++)
+                    recordsPtr[i].Length = 0;
             }
 
             m_TotalLength = 0;

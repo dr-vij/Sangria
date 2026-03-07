@@ -49,7 +49,12 @@ namespace SangriaMesh
             EnsureVertexAttribute<float2>(ref detail, AttributeID.UV0, "Add vertex UV0 attribute");
 
             detail.Clear();
-            detail.AllocateDenseTopologyUnchecked(pointCount, vertexCount, primitiveCount, prepareTriangleStorage: true);
+            detail.AllocateDenseTopologyUnchecked(
+                pointCount,
+                vertexCount,
+                primitiveCount,
+                prepareTriangleStorage: true,
+                initializeVertexToPoint: false);
 
             Ensure(detail.TryGetPointAccessor<float3>(AttributeID.Position, out var pointPositionAccessor), "Get point position accessor");
             Ensure(detail.TryGetPointAccessor<float3>(AttributeID.Normal, out var pointNormalAccessor), "Get point normal accessor");

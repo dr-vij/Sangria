@@ -1,27 +1,66 @@
 # SangriaMesh
 
-SangriaMesh is an alternative mesh kernel with a two-stage data model:
+SangriaMesh currently contains two mesh stacks in one package:
 
-1. `NativeDetail` (editable)
-2. `NativeCompiledDetail` (compiled snapshot)
+1. `SangriaMesh` namespace (new node-oriented core)
+2. `ViJMeshTools` namespace (legacy mesh cutting/tessellation pipeline)
 
-It is intended to preserve authoring flexibility while providing dense runtime-friendly data for Burst jobs and GPU paths.
+This README documents the **current** state of the new core and where it intersects with legacy code.
 
-## Documentation
+## What Is Production-Ready
 
-- Full architecture and design notes: [ARCHITECTURE.md](./ARCHITECTURE.md)
+- Editable mesh core: `NativeDetail`
+- Dense runtime snapshot: `NativeCompiledDetail`
+- Domain attributes (`Point`, `Vertex`, `Primitive`) with typed handles/accessors
+- Custom resources via `ResourceRegistry`
+- Dense compile fast path when topology is contiguous
+- Unity mesh conversion:
+  - fast triangle-only path: `FillUnityMeshTriangles`
+  - polygon path with triangulation fallback: `FillUnityMesh`
+- Sphere generator optimized for dense writes: `SangriaMeshSphereGenerator`
 
-## Core objectives
+## Current Module Layout
 
-1. Domain-based custom attributes (`point`, `vertex`, `primitive`)
-2. Stable references in mutable mode (`ElementHandle`)
-3. Dense compile output for fast processing
-4. Extensible custom resources (`ResourceRegistry`)
+- Core types and storage:
+  - `./NativeDetail.cs`
+  - `./SparseHandleSet.cs`
+  - `./PrimitiveStorage.cs`
+  - `./AttributeStore.cs`
+  - `./ResourceRegistry.cs`
+- Compiled snapshot layer:
+  - `./NativeCompiledDetail.cs`
+  - `./CompiledAttributeSet.cs`
+  - `./CompiledResourceSet.cs`
+- Unity bridge and generators:
+  - `../Generators/SangriaMeshUnityMeshExtensions.cs`
+  - `../Generators/SangriaMeshSphereGenerator.cs`
+- Debug/example:
+  - `../Debug/DetailVisualizer.cs`
+  - `../ExampleUsage/SangriaMeshExample.cs`
+- Legacy cutter stack (separate path, not yet migrated to core):
+  - `../../../Scripts/MeshOpps/*.cs`
+  - `../../../Scripts/Helpers/TessAdapter.cs`
 
-## Typical workflow
+## Typical Node Workflow
 
-1. Build or modify mesh in `NativeDetail`.
-2. Resolve typed attribute handles and write attributes/resources.
+1. Build/update editable topology in `NativeDetail`.
+2. Register and write attributes/resources.
 3. Call `Compile()` to produce `NativeCompiledDetail`.
-4. Process with dense arrays and compiled accessors.
-5. Convert to `UnityEngine.Mesh` with `SangriaMeshUnityMeshExtensions` (polygon primitives use ear clipping with fan fallback, triangle-only fast path `FillUnityMeshTriangles` uses Unity MeshData API).
+4. Consume dense buffers in Burst jobs or conversion path.
+5. Convert to `UnityEngine.Mesh`:
+   - triangle topology -> `FillUnityMeshTriangles` (fastest)
+   - mixed polygon topology -> `FillUnityMesh`.
+
+## Performance Notes
+
+- `Compile()` currently rebuilds a snapshot from mutable state each call.
+- Best runtime path today is:
+  - keep topology triangle-only,
+  - stay in dense contiguous mode,
+  - use `FillUnityMeshTriangles`.
+- Polygon conversion path uses managed triangulation fallback and is intentionally more general but slower.
+
+## Related Docs
+
+- Architecture and file-level behavior: [ARCHITECTURE.md](./ARCHITECTURE.md)
+- Current development review and performance roadmap: [CodeReview.md](./CodeReview.md)
