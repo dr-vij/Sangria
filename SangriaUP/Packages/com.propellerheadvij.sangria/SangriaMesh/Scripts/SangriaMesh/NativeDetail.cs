@@ -19,6 +19,10 @@ namespace SangriaMesh
         private NativeList<int> m_VertexToPoint;
         private PrimitiveStorage m_PrimitiveStorage;
 
+        private NativeParallelMultiHashMap<int, int> m_PointToVertices;
+        private NativeParallelMultiHashMap<int, int> m_VertexToPrimitives;
+        private bool m_AdjacencyDirty;
+
         private AttributeStore m_PointAttributes;
         private AttributeStore m_VertexAttributes;
         private AttributeStore m_PrimitiveAttributes;
@@ -36,6 +40,7 @@ namespace SangriaMesh
         public int PointCapacity => m_Points.Capacity;
         public int VertexCapacity => m_Vertices.Capacity;
         public int PrimitiveCapacity => m_Primitives.Capacity;
+        public int PrimitiveDataLength => m_PrimitiveStorage.DataLength;
 
         public uint TopologyVersion => m_TopologyVersion;
         public uint AttributeVersion => m_AttributeVersion;
@@ -62,6 +67,9 @@ namespace SangriaMesh
             m_VertexToPoint.Resize(vertexCap, NativeArrayOptions.UninitializedMemory);
             FillNativeArrayWithMinusOne(m_VertexToPoint.AsArray());
             m_PrimitiveStorage = new PrimitiveStorage(primitiveCap, 4, allocator);
+            m_PointToVertices = new NativeParallelMultiHashMap<int, int>(vertexCap, allocator);
+            m_VertexToPrimitives = new NativeParallelMultiHashMap<int, int>(primitiveCap * 4, allocator);
+            m_AdjacencyDirty = false;
 
             m_PointAttributes = new AttributeStore(8, pointCap, allocator);
             m_VertexAttributes = new AttributeStore(8, vertexCap, allocator);
@@ -81,27 +89,61 @@ namespace SangriaMesh
         #region Attributes
 
         public CoreResult AddPointAttribute<T>(int attributeId) where T : unmanaged
-            => m_PointAttributes.RegisterAttribute<T>(attributeId, m_Points.Capacity);
+        {
+            CoreResult result = m_PointAttributes.RegisterAttribute<T>(attributeId, m_Points.Capacity);
+            if (result == CoreResult.Success)
+                m_AttributeVersion++;
+
+            return result;
+        }
 
         public CoreResult AddVertexAttribute<T>(int attributeId) where T : unmanaged
-            => m_VertexAttributes.RegisterAttribute<T>(attributeId, m_Vertices.Capacity);
+        {
+            CoreResult result = m_VertexAttributes.RegisterAttribute<T>(attributeId, m_Vertices.Capacity);
+            if (result == CoreResult.Success)
+                m_AttributeVersion++;
+
+            return result;
+        }
 
         public CoreResult AddPrimitiveAttribute<T>(int attributeId) where T : unmanaged
-            => m_PrimitiveAttributes.RegisterAttribute<T>(attributeId, m_Primitives.Capacity);
+        {
+            CoreResult result = m_PrimitiveAttributes.RegisterAttribute<T>(attributeId, m_Primitives.Capacity);
+            if (result == CoreResult.Success)
+                m_AttributeVersion++;
+
+            return result;
+        }
 
         public CoreResult RemovePointAttribute(int attributeId)
         {
             if (attributeId == AttributeID.Position)
                 return CoreResult.InvalidOperation;
 
-            return m_PointAttributes.RemoveAttribute(attributeId);
+            CoreResult result = m_PointAttributes.RemoveAttribute(attributeId);
+            if (result == CoreResult.Success)
+                m_AttributeVersion++;
+
+            return result;
         }
 
         public CoreResult RemoveVertexAttribute(int attributeId)
-            => m_VertexAttributes.RemoveAttribute(attributeId);
+        {
+            CoreResult result = m_VertexAttributes.RemoveAttribute(attributeId);
+            if (result == CoreResult.Success)
+                m_AttributeVersion++;
+
+            return result;
+        }
 
         public CoreResult RemovePrimitiveAttribute(int attributeId)
-            => m_PrimitiveAttributes.RemoveAttribute(attributeId);
+        {
+            CoreResult result = m_PrimitiveAttributes.RemoveAttribute(attributeId);
+            if (result == CoreResult.Success)
+                m_AttributeVersion++;
+
+            return result;
+        }
 
         public bool HasPointAttribute(int attributeId) => m_PointAttributes.ContainsAttribute(attributeId);
         public bool HasVertexAttribute(int attributeId) => m_VertexAttributes.ContainsAttribute(attributeId);
@@ -193,13 +235,25 @@ namespace SangriaMesh
         #region Resources
 
         public CoreResult SetResource<T>(int resourceId, in T value) where T : unmanaged
-            => m_Resources.SetResource(resourceId, value);
+        {
+            CoreResult result = m_Resources.SetResource(resourceId, value);
+            if (result == CoreResult.Success)
+                m_AttributeVersion++;
+
+            return result;
+        }
 
         public CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
             => m_Resources.TryGetResource(resourceId, out value);
 
         public CoreResult RemoveResource(int resourceId)
-            => m_Resources.RemoveResource(resourceId);
+        {
+            CoreResult result = m_Resources.RemoveResource(resourceId);
+            if (result == CoreResult.Success)
+                m_AttributeVersion++;
+
+            return result;
+        }
 
         #endregion
 
@@ -231,15 +285,19 @@ namespace SangriaMesh
             if (!m_Points.IsAlive(pointIndex))
                 return false;
 
-            using var aliveVertices = new NativeList<int>(Allocator.Temp);
-            m_Vertices.GetAliveIndices(aliveVertices);
+            EnsureAdjacencyUpToDate();
+            using var pointVertices = new NativeList<int>(Allocator.Temp);
+            CollectMultiMapValues(in m_PointToVertices, pointIndex, pointVertices);
 
-            for (int i = 0; i < aliveVertices.Length; i++)
+            for (int i = 0; i < pointVertices.Length; i++)
             {
-                int vertexIndex = aliveVertices[i];
-                if (m_VertexToPoint[vertexIndex] == pointIndex)
+                int vertexIndex = pointVertices[i];
+                if (m_Vertices.IsAlive(vertexIndex))
                     RemoveVertex(vertexIndex);
             }
+
+            if (!m_AdjacencyDirty)
+                m_PointToVertices.Remove(pointIndex);
 
             bool removed = m_Points.Release(pointIndex);
             if (removed)
@@ -310,6 +368,11 @@ namespace SangriaMesh
 
             m_VertexToPoint[vertexIndex] = pointIndex;
             m_VertexAttributes.ClearElement(vertexIndex);
+            if (!m_AdjacencyDirty)
+            {
+                EnsureMultiMapCapacity(ref m_PointToVertices, 1);
+                m_PointToVertices.Add(pointIndex, vertexIndex);
+            }
 
             m_TopologyVersion++;
             m_AttributeVersion++;
@@ -327,24 +390,29 @@ namespace SangriaMesh
             if (!m_Vertices.IsAlive(vertexIndex))
                 return false;
 
-            using var alivePrimitives = new NativeList<int>(Allocator.Temp);
-            m_Primitives.GetAliveIndices(alivePrimitives);
+            EnsureAdjacencyUpToDate();
+            int pointIndex = m_VertexToPoint[vertexIndex];
 
-            for (int i = 0; i < alivePrimitives.Length; i++)
+            using var incidentPrimitives = new NativeList<int>(Allocator.Temp);
+            CollectMultiMapValues(in m_VertexToPrimitives, vertexIndex, incidentPrimitives);
+
+            using var uniquePrimitiveGuard = new NativeHashSet<int>(math_max(1, incidentPrimitives.Length), Allocator.Temp);
+            for (int i = 0; i < incidentPrimitives.Length; i++)
             {
-                int primitiveIndex = alivePrimitives[i];
+                int primitiveIndex = incidentPrimitives[i];
+                if (!uniquePrimitiveGuard.Add(primitiveIndex))
+                    continue;
                 if (!m_Primitives.IsAlive(primitiveIndex))
                     continue;
 
-                var vertices = m_PrimitiveStorage.GetVertices(primitiveIndex);
-                for (int k = vertices.Length - 1; k >= 0; k--)
-                {
-                    if (vertices[k] == vertexIndex)
-                        m_PrimitiveStorage.RemoveVertexAt(primitiveIndex, k);
-                }
+                RemoveVertexFromPrimitiveAllOccurrencesInternal(primitiveIndex, vertexIndex);
+            }
 
-                if (m_Primitives.IsAlive(primitiveIndex) && m_PrimitiveStorage.GetLength(primitiveIndex) < 3)
-                    RemovePrimitive(primitiveIndex);
+            if (!m_AdjacencyDirty)
+            {
+                if (pointIndex >= 0)
+                    RemoveValueFromMultiMap(ref m_PointToVertices, pointIndex, vertexIndex, removeAllMatches: true);
+                m_VertexToPrimitives.Remove(vertexIndex);
             }
 
             m_VertexToPoint[vertexIndex] = -1;
@@ -417,6 +485,12 @@ namespace SangriaMesh
 
             m_PrimitiveAttributes.ClearElement(primitiveIndex);
             m_PrimitiveStorage.SetVertices(primitiveIndex, vertexIndices);
+            if (!m_AdjacencyDirty)
+            {
+                EnsureMultiMapCapacity(ref m_VertexToPrimitives, vertexIndices.Length);
+                for (int i = 0; i < vertexIndices.Length; i++)
+                    m_VertexToPrimitives.Add(vertexIndices[i], primitiveIndex);
+            }
 
             m_TopologyVersion++;
             m_AttributeVersion++;
@@ -444,6 +518,8 @@ namespace SangriaMesh
                 m_Points.AllocateDenseRange(pointCount);
                 if (m_Points.Capacity != oldPointCapacity)
                     m_PointAttributes.EnsureCapacity(m_Points.Capacity);
+
+                m_PointAttributes.ClearRange(0, pointCount);
             }
 
             if (vertexCount > 0)
@@ -457,6 +533,8 @@ namespace SangriaMesh
                 EnsureVertexToPointCapacity(vertexCount);
                 if (initializeVertexToPoint)
                     FillNativeListWithMinusOne(m_VertexToPoint, vertexCount);
+
+                m_VertexAttributes.ClearRange(0, vertexCount);
             }
 
             if (primitiveCount > 0)
@@ -465,24 +543,45 @@ namespace SangriaMesh
                 m_Primitives.AllocateDenseRange(primitiveCount);
                 if (m_Primitives.Capacity != oldPrimitiveCapacity)
                     m_PrimitiveAttributes.EnsureCapacity(m_Primitives.Capacity);
+
+                m_PrimitiveAttributes.ClearRange(0, primitiveCount);
             }
 
             if (prepareTriangleStorage)
                 m_PrimitiveStorage.PrepareDenseTriangleRecords(primitiveCount);
             else if (primitiveCount > 0)
                 m_PrimitiveStorage.EnsureRecordSlot(primitiveCount - 1);
+
+            m_PointToVertices.Clear();
+            m_VertexToPrimitives.Clear();
+            m_AdjacencyDirty = true;
         }
 
         internal void MarkTopologyAndAttributeChanged()
         {
             m_TopologyVersion++;
             m_AttributeVersion++;
+            m_AdjacencyDirty = true;
         }
 
         public bool RemovePrimitive(int primitiveIndex)
         {
             if (!m_Primitives.IsAlive(primitiveIndex))
                 return false;
+
+            if (!m_AdjacencyDirty)
+            {
+                var vertices = m_PrimitiveStorage.GetVertices(primitiveIndex);
+                using var uniqueVertices = new NativeHashSet<int>(math_max(1, vertices.Length), Allocator.Temp);
+                for (int i = 0; i < vertices.Length; i++)
+                {
+                    int vertexIndex = vertices[i];
+                    if (!uniqueVertices.Add(vertexIndex))
+                        continue;
+
+                    RemoveValueFromMultiMap(ref m_VertexToPrimitives, vertexIndex, primitiveIndex, removeAllMatches: true);
+                }
+            }
 
             m_PrimitiveStorage.ClearRecord(primitiveIndex);
             bool removed = m_Primitives.Release(primitiveIndex);
@@ -499,7 +598,14 @@ namespace SangriaMesh
 
             bool result = m_PrimitiveStorage.AppendVertex(primitiveIndex, vertexIndex);
             if (result)
+            {
+                if (!m_AdjacencyDirty)
+                {
+                    EnsureMultiMapCapacity(ref m_VertexToPrimitives, 1);
+                    m_VertexToPrimitives.Add(vertexIndex, primitiveIndex);
+                }
                 m_TopologyVersion++;
+            }
 
             return result;
         }
@@ -509,9 +615,15 @@ namespace SangriaMesh
             if (!m_Primitives.IsAlive(primitiveIndex))
                 return false;
 
+            int removedVertexIndex = m_PrimitiveStorage.GetVertex(primitiveIndex, vertexOffset);
             bool removed = m_PrimitiveStorage.RemoveVertexAt(primitiveIndex, vertexOffset);
             if (!removed)
                 return false;
+
+            if (!m_AdjacencyDirty && removedVertexIndex >= 0)
+            {
+                RemoveValueFromMultiMap(ref m_VertexToPrimitives, removedVertexIndex, primitiveIndex, removeAllMatches: false);
+            }
 
             if (m_PrimitiveStorage.GetLength(primitiveIndex) < 3)
                 return RemovePrimitive(primitiveIndex);
@@ -764,6 +876,9 @@ namespace SangriaMesh
 
             m_PrimitiveStorage.Clear();
             FillNativeListWithMinusOne(m_VertexToPoint, m_VertexToPoint.Length);
+            m_PointToVertices.Clear();
+            m_VertexToPrimitives.Clear();
+            m_AdjacencyDirty = false;
 
             m_Resources.Clear();
 
@@ -784,6 +899,10 @@ namespace SangriaMesh
                 m_VertexToPoint.Dispose();
 
             m_PrimitiveStorage.Dispose();
+            if (m_PointToVertices.IsCreated)
+                m_PointToVertices.Dispose();
+            if (m_VertexToPrimitives.IsCreated)
+                m_VertexToPrimitives.Dispose();
 
             m_PointAttributes.Dispose();
             m_VertexAttributes.Dispose();
@@ -798,6 +917,137 @@ namespace SangriaMesh
         {
             while (m_VertexToPoint.Length < required)
                 m_VertexToPoint.Add(-1);
+        }
+
+        private void EnsureAdjacencyUpToDate()
+        {
+            if (!m_AdjacencyDirty)
+                return;
+
+            m_PointToVertices.Clear();
+            m_VertexToPrimitives.Clear();
+
+            EnsureMultiMapCapacity(ref m_PointToVertices, m_Vertices.Count);
+            EnsureMultiMapCapacity(ref m_VertexToPrimitives, m_PrimitiveStorage.TotalVertexCount);
+
+            using var aliveVertices = new NativeList<int>(Allocator.Temp);
+            m_Vertices.GetAliveIndices(aliveVertices);
+            for (int i = 0; i < aliveVertices.Length; i++)
+            {
+                int vertexIndex = aliveVertices[i];
+                int pointIndex = m_VertexToPoint[vertexIndex];
+                if (!m_Points.IsAlive(pointIndex))
+                    continue;
+
+                m_PointToVertices.Add(pointIndex, vertexIndex);
+            }
+
+            using var alivePrimitives = new NativeList<int>(Allocator.Temp);
+            m_Primitives.GetAliveIndices(alivePrimitives);
+            for (int i = 0; i < alivePrimitives.Length; i++)
+            {
+                int primitiveIndex = alivePrimitives[i];
+                var vertices = m_PrimitiveStorage.GetVertices(primitiveIndex);
+                for (int k = 0; k < vertices.Length; k++)
+                {
+                    int vertexIndex = vertices[k];
+                    if (!m_Vertices.IsAlive(vertexIndex))
+                        continue;
+
+                    m_VertexToPrimitives.Add(vertexIndex, primitiveIndex);
+                }
+            }
+
+            m_AdjacencyDirty = false;
+        }
+
+        private void RemoveVertexFromPrimitiveAllOccurrencesInternal(int primitiveIndex, int vertexIndex)
+        {
+            var vertices = m_PrimitiveStorage.GetVertices(primitiveIndex);
+            bool removedAny = false;
+            for (int k = vertices.Length - 1; k >= 0; k--)
+            {
+                if (vertices[k] != vertexIndex)
+                    continue;
+
+                m_PrimitiveStorage.RemoveVertexAt(primitiveIndex, k);
+                removedAny = true;
+            }
+
+            if (!removedAny)
+                return;
+
+            if (!m_AdjacencyDirty)
+                RemoveValueFromMultiMap(ref m_VertexToPrimitives, vertexIndex, primitiveIndex, removeAllMatches: true);
+
+            if (m_PrimitiveStorage.GetLength(primitiveIndex) < 3)
+                RemovePrimitive(primitiveIndex);
+        }
+
+        private static void CollectMultiMapValues(
+            in NativeParallelMultiHashMap<int, int> map,
+            int key,
+            NativeList<int> output)
+        {
+            output.Clear();
+
+            if (!map.TryGetFirstValue(key, out int value, out NativeParallelMultiHashMapIterator<int> iterator))
+                return;
+
+            do
+            {
+                output.Add(value);
+            }
+            while (map.TryGetNextValue(out value, ref iterator));
+        }
+
+        private static void RemoveValueFromMultiMap(
+            ref NativeParallelMultiHashMap<int, int> map,
+            int key,
+            int valueToRemove,
+            bool removeAllMatches)
+        {
+            if (!map.TryGetFirstValue(key, out int value, out NativeParallelMultiHashMapIterator<int> iterator))
+                return;
+
+            using var valuesToKeep = new NativeList<int>(Allocator.Temp);
+            bool removed = false;
+
+            do
+            {
+                if (value == valueToRemove && (removeAllMatches || !removed))
+                {
+                    removed = true;
+                    continue;
+                }
+
+                valuesToKeep.Add(value);
+            }
+            while (map.TryGetNextValue(out value, ref iterator));
+
+            map.Remove(key);
+            if (valuesToKeep.Length <= 0)
+                return;
+
+            EnsureMultiMapCapacity(ref map, valuesToKeep.Length);
+            for (int i = 0; i < valuesToKeep.Length; i++)
+                map.Add(key, valuesToKeep[i]);
+        }
+
+        private static void EnsureMultiMapCapacity(ref NativeParallelMultiHashMap<int, int> map, int additionalEntries)
+        {
+            if (additionalEntries <= 0)
+                return;
+
+            int required = map.Count() + additionalEntries;
+            if (required <= map.Capacity)
+                return;
+
+            int newCapacity = math_max(1, map.Capacity);
+            while (newCapacity < required)
+                newCapacity *= 2;
+
+            map.Capacity = newCapacity;
         }
 
         private static unsafe CompiledAttributeSet CompileAttributes(

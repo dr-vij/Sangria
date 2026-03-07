@@ -149,6 +149,8 @@ namespace SangriaMesh
                 return CoreResult.InvalidHandle;
 
             var column = m_Columns[handle.ColumnIndex];
+            if (column.AttributeId != handle.AttributeId)
+                return CoreResult.InvalidHandle;
             if (column.TypeHash != handle.TypeHash)
                 return CoreResult.InvalidHandle;
 
@@ -165,6 +167,8 @@ namespace SangriaMesh
                 return CoreResult.InvalidHandle;
 
             var column = m_Columns[handle.ColumnIndex];
+            if (column.AttributeId != handle.AttributeId)
+                return CoreResult.InvalidHandle;
             if (column.TypeHash != handle.TypeHash)
                 return CoreResult.InvalidHandle;
 
@@ -183,6 +187,8 @@ namespace SangriaMesh
                 return CoreResult.InvalidHandle;
 
             var column = m_Columns[handle.ColumnIndex];
+            if (column.AttributeId != handle.AttributeId)
+                return CoreResult.InvalidHandle;
             if (column.TypeHash != handle.TypeHash)
                 return CoreResult.InvalidHandle;
 
@@ -200,6 +206,29 @@ namespace SangriaMesh
                 var column = m_Columns[i];
                 byte* ptr = column.Buffer.Ptr + elementIndex * column.Stride;
                 UnsafeUtility.MemClear(ptr, column.Stride);
+            }
+        }
+
+        public void ClearRange(int startElementIndex, int count)
+        {
+            if (count <= 0)
+                return;
+            if (startElementIndex >= m_ElementCapacity)
+                return;
+
+            int start = startElementIndex < 0 ? 0 : startElementIndex;
+            int maxCount = m_ElementCapacity - start;
+            if (maxCount <= 0)
+                return;
+
+            if (count > maxCount)
+                count = maxCount;
+
+            for (int i = 0; i < m_Columns.Length; i++)
+            {
+                var column = m_Columns[i];
+                byte* ptr = column.Buffer.Ptr + start * column.Stride;
+                UnsafeUtility.MemClear(ptr, column.Stride * count);
             }
         }
 

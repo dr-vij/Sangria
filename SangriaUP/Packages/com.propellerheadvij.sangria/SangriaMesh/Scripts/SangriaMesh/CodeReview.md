@@ -1,128 +1,179 @@
-# CodeReview: SangriaMesh package status and performance roadmap
+# SangriaMesh Core Review (Updated)
 
-Date: 2026-03-06
-Scope: `Packages/com.propellerheadvij.sangria/SangriaMesh`
-Constraints: build/tests were not run by request.
+Date: 2026-03-08  
+Scope: `Packages/com.propellerheadvij.sangria/SangriaMesh/Scripts/SangriaMesh` and `Scripts/Generators` in `namespace SangriaMesh` only.  
+Explicitly excluded: `Scripts-legacy`, `ViJMeshTools`, and any legacy cutter/tessellation code paths.
 
-## 1. Current Development Status
+## Executive Summary
 
-The package currently contains two independent stacks:
+The core is in a much better state than in the previous pass.  
+The two most dangerous correctness risks (stale attribute handles and generation reset in dense allocation) are fixed.  
+The four high-priority items from the last report are also now addressed in code:
 
-1. `SangriaMesh` (new node-oriented core)
-- strong data model (`NativeDetail` -> `NativeCompiledDetail`)
-- stable handle lifecycle (`SparseHandleSet` + generations)
-- domain attributes/resources with typed accessors
-- dense triangle conversion fast path to Unity MeshData API
+1. Attribute/resource schema changes now update `AttributeVersion`.
+2. Dense topology allocation now clears custom attribute ranges explicitly.
+3. `PrimitiveStorage` now has garbage tracking and compaction behavior.
+4. Vertex/point deletion no longer depends on global full scans; adjacency caches were introduced.
 
-2. `ViJMeshTools` (legacy cutter/tessellation)
-- plane cut + contour reconstruction + LibTess triangulation
-- separate data model, not integrated into the new core snapshot pipeline
-- contains most of the highest-cost runtime code paths for cutting
+For planned expansion (interactive mesh editing, vertex deletion modes, local topology tools), this is a meaningful step forward.
 
-Net: core architecture is solid and modernized, but high-load cutting/tessellation is still in the legacy path.
+The remaining risks are mostly about performance predictability and API robustness rather than immediate correctness bugs.
 
-## 2. Findings (ordered by severity)
+## What Was Fixed Since The Last Revision
 
-### Critical
+### 1. Handle safety for dynamic attribute schemas
 
-1. Possible invalid memory usage in watertight validator loop
-- File: `Scripts/MeshOpps/MeshWatertightValidationJob.cs`
-- Lines: 35, 38-58
-- `vertices` is allocated once before submesh loop and disposed inside the loop (`line 57`).
-- On meshes with more than one submesh, later iterations may access a disposed container.
-- Impact: correctness risk (undefined behavior/crash), not only performance.
+Previously, a removed attribute could leave behind a stale handle that accidentally pointed to another column after internal swap-back.  
+Now, `AttributeStore` checks `AttributeId` in addition to column index and type hash when accessing through a handle.
 
-### High
+This closes a silent corruption class that was especially dangerous in long editor sessions with dynamic attribute registration.
 
-1. O(n^2) contour consolidation in hot cutting path
-- File: `Scripts/Helpers/TessAdapter.cs`
-- Lines: 47-49, 168-208
-- `CreateContours()` uses `ConsolidateContoursFromSegmentsBruteforce(...)` directly.
-- This is quadratic and managed-allocation-heavy for large cut segment counts.
-- Impact: major CPU growth as cut complexity increases.
+Relevant file:
+- `Scripts/SangriaMesh/AttributeStore.cs`
 
-2. Triangle splitting duplicates geometry aggressively
-- File: `Scripts/MeshOpps/CutMeshWithPlaneJob.cs`
-- Lines: 130-387
-- Intersected triangles are expanded by duplicating vertices per output triangle.
-- No intersection vertex reuse cache; no parallel partitioning by triangle blocks.
-- Impact: large memory traffic + extra write amplification in dense meshes.
+### 2. Generation integrity in dense allocation
 
-3. Full snapshot rebuild on every `Compile()` call
-- File: `PropellerheadMesh/Scripts/SangriaMesh/NativeDetail.cs`
-- Lines: 547-737, 788-883
-- Even small edits rebuild dense topology and all packed attribute/resource buffers.
-- Impact: can dominate frame time in node graphs with frequent micro-updates.
+Previously, `AllocateDenseRange` could reset generations to `1`, potentially re-validating old handles after clear/rebuild cycles.  
+Now generation is only initialized for zeroed slots, preserving monotonic generation semantics.
 
-4. General polygon conversion path is managed and non-linear
-- File: `PropellerheadMesh/Scripts/Generators/SangriaMeshUnityMeshExtensions.cs`
-- Lines: 243-390, 532-611
-- Uses managed arrays/lists and ear clipping fallback on polygons.
-- Impact: much slower than triangle fast path and more GC pressure.
+Relevant file:
+- `Scripts/SangriaMesh/SparseHandleSet.cs`
 
-### Medium
+### 3. Versioning contract for schema/resource mutations
 
-1. Legacy support contract mismatch risk
-- File: `Scripts/MeshOpps/MeshSupportedValidator.cs`
-- Lines: 12-40
-- Comment says cutter supports `ushort` index format; runtime checks only vertex attributes.
-- Impact: hidden runtime assumptions and debugging cost.
+Previously, `AttributeVersion` mostly reflected value writes, but not schema-level changes (add/remove attribute, set/remove resource).  
+Now successful structural mutations increment `AttributeVersion`, which makes future cache invalidation and incremental compile strategies safer.
 
-## 3. Dramatic-Only Performance Improvements
+Relevant file:
+- `Scripts/SangriaMesh/NativeDetail.cs`
 
-Only improvements with potential for **step-change** speedups are listed below.
+### 4. Explicit attribute range clearing on dense rebuild
 
-1. Unify cutting pipeline around dense `SangriaMesh` core + parallel clipping
-- Move plane-cut output directly into `NativeDetail`/compiled buffers.
-- Replace current serial triangle split with Burst-parallel triangle processing (`IJobParallelFor`) and edge-intersection cache (quantized key -> intersection vertex index).
-- Why dramatic: removes duplicated conversion layers and reduces repeated writes/allocations across the whole pipeline.
+`AllocateDenseTopologyUnchecked` now clears point/vertex/primitive attribute ranges for newly alive elements, preventing stale payload leakage between rebuilds.
 
-2. Replace contour reconstruction+tessellation kernel
-- Current bottleneck: bruteforce contour stitch + LibTess managed preprocessing.
-- High-impact options:
-  - robust path: native constrained triangulation/clip backend (e.g., CGAL-style clipping/triangulation pipeline)
-  - speed path: earcut-style z-order triangulation in native/Burst-friendly implementation
-- Why dramatic: this stage is currently algorithmically super-linear and allocation-heavy.
+Relevant files:
+- `Scripts/SangriaMesh/AttributeStore.cs`
+- `Scripts/SangriaMesh/NativeDetail.cs`
 
-3. Add incremental compile mode (dirty ranges) for `NativeDetail`
-- Keep compiled buffers alive and patch only dirty domains/elements instead of full rebuild.
-- Track dirty point/vertex/primitive ranges + dirty attributes/resources.
-- Why dramatic: in node workflows with local edits, work drops from O(total mesh) to O(changed subset).
+### 5. Primitive storage reclaim strategy
 
-4. Add GPU slicing/triangulation path for very large meshes
-- Keep CPU/Burst path for small-medium meshes.
-- Route high-poly batches to compute path.
-- Why dramatic: modern GPU slicing/triangulation research reports order-of-magnitude acceleration when data size is large enough.
+`PrimitiveStorage` now tracks garbage capacity and compacts data when fragmentation crosses a threshold.  
+It also clears record/data arrays fully on `Clear()`.
 
-## 4. Internet Research That Informed Recommendations
+This materially improves long-session behavior under repeated topology mutations.
 
-1. Unity MeshData API and overhead guidance
-- Unity docs recommend using `MeshDataArray` and batching operations to reduce safety/validation overhead.
-- Source: https://docs.unity3d.com/cn/current/ScriptReference/Mesh.MeshData.html
+Relevant file:
+- `Scripts/SangriaMesh/PrimitiveStorage.cs`
 
-2. Unity Burst optimization guidance
-- Burst docs emphasize SIMD-friendly patterns (e.g., vectorized math) and direct code generation inspection for hot loops.
-- Source: https://docs.unity.cn/Packages/com.unity.burst@1.7/manual/docs/OptimizationGuidelines.html
+### 6. Adjacency-aware deletion flow
 
-3. Earcut algorithm characteristics
-- Earcut uses z-order curve hashing for acceleration but does not guarantee correctness for all pathological polygons.
-- Source: https://github.com/mapbox/earcut.hpp
+`NativeDetail` now maintains `Point -> Vertices` and `Vertex -> Primitives` maps.  
+Deletion paths (`RemovePoint`, `RemoveVertex`) use these maps, with lazy rebuild when adjacency is marked dirty.
 
-4. CGAL polygon mesh slicing/clipping capabilities
-- CGAL provides robust mesh slicing and clipping primitives (AABB-tree-backed slicer, clipping APIs), useful as a robust backend direction.
-- Source: https://doc.cgal.org/latest/Polygon_mesh_processing/index.html
+This removes the previous always-global scans and establishes a better base for edit tools.
 
-5. Robust triangulation foundations
-- Shewchuk's work (Triangle) documents robust exact-predicate triangulation and engineering tradeoffs for reliability/performance.
-- Source: https://www.cs.cmu.edu/~quake/tripaper/triangle0.html
+Relevant file:
+- `Scripts/SangriaMesh/NativeDetail.cs`
 
-6. GPU triangulation/slicing scale results
-- Recent GPU triangulation/meshing papers report large speedups for massive geometric workloads.
-- Sources:
-  - https://arxiv.org/abs/2405.10961
-  - https://arxiv.org/abs/2405.04067
+## Current State Of The Core (After Fixes)
 
-## 5. Conclusion
+### What is now strong
 
-Current package direction is correct: the new `SangriaMesh` core is structurally strong and much closer to high-performance node workflows than the legacy cutter stack. To reach maximum speed, the major gains are not in micro-optimizations; they are in architectural migration of cut/tessellation to dense parallel data paths, incremental compile, and optional GPU offload for the large-mesh tier.
+The data model remains clean and practical: points, vertices, primitives, typed attributes, and compiled dense snapshots.  
+With the recent fixes, lifecycle guarantees are significantly stronger, and mutation paths are more consistent with future editing workloads.
+
+The sphere generator and triangle fast path still provide a solid high-throughput route for runtime generation.
+
+### What still deserves attention
+
+The core is now safer, but not yet fully optimized for large interactive edit sessions.  
+The remaining work is more about predictability under load than correctness blockers.
+
+## Open Findings (Current)
+
+### High: synchronous compaction can create frame-time spikes
+
+`PrimitiveStorage` compaction is currently in-band and threshold-triggered.  
+That is simple and valid, but if a large mesh crosses the threshold during interactive editing, compaction cost is paid immediately in that mutation call.
+
+Why this matters:
+- You avoid unbounded memory growth, but you may introduce occasional latency spikes.
+
+Suggested next step:
+- Add an explicit `Compact()` API and/or deferred compaction policy (for example, run only at controlled sync points).
+
+### High: adjacency map updates are robust but still allocation/work heavy in hot mutation loops
+
+The new adjacency model is a clear improvement over global scans.  
+However, key-level removals currently rebuild value lists for that key (`remove + re-add kept values` pattern), which can still be expensive for high-valence vertices.
+
+Why this matters:
+- Better asymptotics than full scans, but frequent local edits on dense hubs can still become costly.
+
+Suggested next step:
+- Introduce a lighter-weight adjacency entry structure with direct remove support or pooled scratch buffers to reduce per-mutation work.
+
+### Medium: compile path is still full snapshot rebuild
+
+`Compile()` still rebuilds packed topology + attributes + resources every call.  
+With the new versioning and safer contracts, the codebase is now better prepared for incremental compilation, but it is not implemented yet.
+
+Why this matters:
+- In node graphs with micro-edits, cost remains proportional to total mesh size.
+
+Suggested next step:
+- Track dirty ranges per domain and patch only modified spans in compiled buffers.
+
+### Medium: polygon conversion path remains managed and non-linear
+
+General polygon triangulation in `SangriaMeshUnityMeshExtensions` is still managed and relatively expensive compared to triangle-only conversion.
+
+Why this matters:
+- For mixed topology workloads, this can dominate conversion time and allocation pressure.
+
+Suggested next step:
+- Keep current path for correctness fallback, but add a faster native/Burst triangulation route for common polygon cases.
+
+### Medium: `NativeCompiledDetail` ownership model is still easy to misuse
+
+`NativeCompiledDetail` remains a mutable struct owning native memory.  
+This works, but value-copy accidents can still lead to disposal mistakes in downstream usage.
+
+Why this matters:
+- It is a reliability footgun for external consumers of the API.
+
+Suggested next step:
+- Consider a safer ownership wrapper or stricter usage pattern documentation.
+
+## Test Coverage Added For This Iteration
+
+The following tests were added to cover the latest fixes:
+
+- `AttributeVersionIncrementsForSchemaAndResourceMutations`
+- `DenseRebuildClearsAllCustomAttributeDomains`
+- `PrimitiveStorageCompactsAfterLargeGarbageAccumulation`
+- `RemovingVertexAfterPrimitiveMutationKeepsAdjacencyConsistent`
+- `RemovingPointWithMultipleVerticesRemovesAllIncidentPrimitives`
+- `RemovingVertexAfterDensePopulateRebuildsAdjacencyCache`
+
+Previously added critical tests are still relevant:
+
+- `StaleAttributeHandleIsRejectedAfterRemoveAndReAdd`
+- `PointHandleStaysInvalidAfterDenseRebuildPath`
+
+## Practical Next Steps For Mesh Editing Expansion
+
+If the immediate goal is to continue toward robust mesh editing features (vertex delete policies, collapses, local surgery), the most pragmatic sequence is:
+
+1. Stabilize adjacency performance and compaction scheduling so mutation latency is predictable.
+2. Add explicit edit-policy APIs (for example, remove vertex with strategy flags).
+3. Introduce incremental compile for small local edits.
+4. Keep polygon conversion as a separate optimization track so topology authoring and mesh conversion concerns do not block each other.
+
+This keeps momentum on functionality while reducing the chance of regressions in large real scenes.
+
+## Validation Note
+
+This report is based on static code inspection and the added test set in source.  
+Build/test execution was not run in this review pass.
 

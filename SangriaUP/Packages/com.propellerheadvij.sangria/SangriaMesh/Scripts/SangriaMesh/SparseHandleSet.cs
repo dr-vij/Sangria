@@ -79,7 +79,7 @@ namespace SangriaMesh
 
             EnsureCapacity(endExclusive);
             m_Alive.SetBits(start, true, count);
-            WriteGenerationRange(start, count, 1u);
+            EnsureGenerationInitializedRange(start, count);
 
             m_NextUnusedIndex = endExclusive;
             m_Count += count;
@@ -193,14 +193,18 @@ namespace SangriaMesh
             m_IsDisposed = true;
         }
 
-        private void WriteGenerationRange(int start, int count, uint value)
+        private void EnsureGenerationInitializedRange(int start, int count)
         {
             if (count <= 0)
                 return;
 
             var generationsArray = m_Generations.AsArray();
-            uint* dst = (uint*)NativeArrayUnsafeUtility.GetUnsafePtr(generationsArray) + start;
-            UnsafeUtility.MemCpyReplicate(dst, &value, UnsafeUtility.SizeOf<uint>(), count);
+            uint* ptr = (uint*)NativeArrayUnsafeUtility.GetUnsafePtr(generationsArray) + start;
+            for (int i = 0; i < count; i++)
+            {
+                if (ptr[i] == 0u)
+                    ptr[i] = 1u;
+            }
         }
 
         private void IncrementGenerationRange(int start, int count)

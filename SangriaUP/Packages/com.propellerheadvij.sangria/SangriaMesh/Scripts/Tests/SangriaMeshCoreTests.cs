@@ -10,6 +10,15 @@ public class SangriaMeshCoreTests
     private const int PrimitiveMaterialAttribute = 3001;
     private const int ResourceId = 4001;
     private const int LatePointAttribute = 5001;
+    private const int HandleSafetyAttrA = 6001;
+    private const int HandleSafetyAttrB = 6002;
+    private const int VersionPointAttribute = 7001;
+    private const int VersionVertexAttribute = 7002;
+    private const int VersionPrimitiveAttribute = 7003;
+    private const int VersionResourceId = 7004;
+    private const int DenseClearPointAttribute = 7101;
+    private const int DenseClearVertexAttribute = 7102;
+    private const int DenseClearPrimitiveAttribute = 7103;
 
     private struct TestResource
     {
@@ -97,6 +106,292 @@ public class SangriaMeshCoreTests
         Assert.IsTrue(detail.IsPointHandleValid(newHandle));
 
         detail.Dispose();
+    }
+
+    [Test]
+    public void StaleAttributeHandleIsRejectedAfterRemoveAndReAdd()
+    {
+        var detail = new NativeDetail(4, Allocator.Temp);
+        try
+        {
+            int pointIndex = detail.AddPoint(new float3(0f, 0f, 0f));
+
+            Assert.AreEqual(CoreResult.Success, detail.AddPointAttribute<float>(HandleSafetyAttrA));
+            Assert.AreEqual(CoreResult.Success, detail.TryGetPointAttributeHandle<float>(HandleSafetyAttrA, out var staleHandle));
+            Assert.AreEqual(CoreResult.Success, detail.RemovePointAttribute(HandleSafetyAttrA));
+
+            Assert.AreEqual(CoreResult.Success, detail.AddPointAttribute<float>(HandleSafetyAttrB));
+            Assert.AreEqual(CoreResult.Success, detail.TryGetPointAttributeHandle<float>(HandleSafetyAttrB, out var activeHandle));
+
+            Assert.AreEqual(CoreResult.InvalidHandle, detail.TrySetPointAttribute(pointIndex, staleHandle, 10f));
+            Assert.AreEqual(CoreResult.InvalidHandle, detail.TryGetPointAttribute(pointIndex, staleHandle, out _));
+
+            Assert.AreEqual(CoreResult.Success, detail.TrySetPointAttribute(pointIndex, activeHandle, 20f));
+            Assert.AreEqual(CoreResult.Success, detail.TryGetPointAttribute(pointIndex, activeHandle, out float value));
+            Assert.AreEqual(20f, value);
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void PointHandleStaysInvalidAfterDenseRebuildPath()
+    {
+        var detail = new NativeDetail(8, Allocator.Temp);
+        try
+        {
+            detail.AddPoint(new float3(1f, 2f, 3f), out var oldHandle);
+            Assert.IsTrue(detail.IsPointHandleValid(oldHandle));
+
+            SangriaMeshSphereGenerator.PopulateUvSphere(ref detail, 0.5f, 8, 6);
+
+            Assert.IsFalse(detail.IsPointHandleValid(oldHandle));
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void AttributeVersionIncrementsForSchemaAndResourceMutations()
+    {
+        var detail = new NativeDetail(8, Allocator.Temp);
+        try
+        {
+            uint expectedVersion = detail.AttributeVersion;
+
+            Assert.AreEqual(CoreResult.Success, detail.AddPointAttribute<float>(VersionPointAttribute));
+            expectedVersion++;
+            Assert.AreEqual(expectedVersion, detail.AttributeVersion);
+
+            Assert.AreEqual(CoreResult.Success, detail.AddVertexAttribute<int>(VersionVertexAttribute));
+            expectedVersion++;
+            Assert.AreEqual(expectedVersion, detail.AttributeVersion);
+
+            Assert.AreEqual(CoreResult.Success, detail.AddPrimitiveAttribute<float>(VersionPrimitiveAttribute));
+            expectedVersion++;
+            Assert.AreEqual(expectedVersion, detail.AttributeVersion);
+
+            Assert.AreEqual(CoreResult.AlreadyExists, detail.AddPointAttribute<float>(VersionPointAttribute));
+            Assert.AreEqual(expectedVersion, detail.AttributeVersion);
+
+            Assert.AreEqual(CoreResult.Success, detail.RemovePointAttribute(VersionPointAttribute));
+            expectedVersion++;
+            Assert.AreEqual(expectedVersion, detail.AttributeVersion);
+
+            Assert.AreEqual(CoreResult.Success, detail.RemoveVertexAttribute(VersionVertexAttribute));
+            expectedVersion++;
+            Assert.AreEqual(expectedVersion, detail.AttributeVersion);
+
+            Assert.AreEqual(CoreResult.Success, detail.RemovePrimitiveAttribute(VersionPrimitiveAttribute));
+            expectedVersion++;
+            Assert.AreEqual(expectedVersion, detail.AttributeVersion);
+
+            var resource = new TestResource { Value = 1.5f, Flags = 11 };
+            Assert.AreEqual(CoreResult.Success, detail.SetResource(VersionResourceId, resource));
+            expectedVersion++;
+            Assert.AreEqual(expectedVersion, detail.AttributeVersion);
+
+            resource.Value = 2.5f;
+            resource.Flags = 12;
+            Assert.AreEqual(CoreResult.Success, detail.SetResource(VersionResourceId, resource));
+            expectedVersion++;
+            Assert.AreEqual(expectedVersion, detail.AttributeVersion);
+
+            Assert.AreEqual(CoreResult.NotFound, detail.RemoveResource(VersionResourceId + 1));
+            Assert.AreEqual(expectedVersion, detail.AttributeVersion);
+
+            Assert.AreEqual(CoreResult.Success, detail.RemoveResource(VersionResourceId));
+            expectedVersion++;
+            Assert.AreEqual(expectedVersion, detail.AttributeVersion);
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void DenseRebuildClearsAllCustomAttributeDomains()
+    {
+        var detail = new NativeDetail(16, Allocator.Temp);
+        try
+        {
+            Assert.AreEqual(CoreResult.Success, detail.AddPointAttribute<float>(DenseClearPointAttribute));
+            Assert.AreEqual(CoreResult.Success, detail.AddVertexAttribute<int>(DenseClearVertexAttribute));
+            Assert.AreEqual(CoreResult.Success, detail.AddPrimitiveAttribute<float>(DenseClearPrimitiveAttribute));
+
+            int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
+            int p1 = detail.AddPoint(new float3(1f, 0f, 0f));
+            int p2 = detail.AddPoint(new float3(0f, 1f, 0f));
+            int v0 = detail.AddVertex(p0);
+            int v1 = detail.AddVertex(p1);
+            int v2 = detail.AddVertex(p2);
+
+            using (var tri = new NativeArray<int>(new[] { v0, v1, v2 }, Allocator.Temp))
+                Assert.GreaterOrEqual(detail.AddPrimitive(tri), 0);
+
+            Assert.AreEqual(CoreResult.Success, detail.TryGetPointAttributeHandle<float>(DenseClearPointAttribute, out var pointHandle));
+            Assert.AreEqual(CoreResult.Success, detail.TryGetVertexAttributeHandle<int>(DenseClearVertexAttribute, out var vertexHandle));
+            Assert.AreEqual(CoreResult.Success, detail.TryGetPrimitiveAttributeHandle<float>(DenseClearPrimitiveAttribute, out var primitiveHandle));
+
+            Assert.AreEqual(CoreResult.Success, detail.TrySetPointAttribute(p0, pointHandle, 123f));
+            Assert.AreEqual(CoreResult.Success, detail.TrySetVertexAttribute(v0, vertexHandle, 456));
+            Assert.AreEqual(CoreResult.Success, detail.TrySetPrimitiveAttribute(0, primitiveHandle, 789f));
+
+            SangriaMeshSphereGenerator.PopulateUvSphere(ref detail, 0.5f, 8, 6);
+
+            Assert.AreEqual(CoreResult.Success, detail.TryGetPointAttribute(0, pointHandle, out float pointValue));
+            Assert.AreEqual(CoreResult.Success, detail.TryGetVertexAttribute(0, vertexHandle, out int vertexValue));
+            Assert.AreEqual(CoreResult.Success, detail.TryGetPrimitiveAttribute(0, primitiveHandle, out float primitiveValue));
+
+            Assert.AreEqual(0f, pointValue);
+            Assert.AreEqual(0, vertexValue);
+            Assert.AreEqual(0f, primitiveValue);
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void PrimitiveStorageCompactsAfterLargeGarbageAccumulation()
+    {
+        var detail = new NativeDetail(16, Allocator.Temp);
+        try
+        {
+            int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
+            int p1 = detail.AddPoint(new float3(1f, 0f, 0f));
+            int p2 = detail.AddPoint(new float3(0f, 1f, 0f));
+            int v0 = detail.AddVertex(p0);
+            int v1 = detail.AddVertex(p1);
+            int v2 = detail.AddVertex(p2);
+
+            using var tri = new NativeArray<int>(new[] { v0, v1, v2 }, Allocator.Temp);
+            int primitiveIndex = detail.AddPrimitive(tri);
+            Assert.GreaterOrEqual(primitiveIndex, 0);
+
+            int initialDataLength = detail.PrimitiveDataLength;
+            for (int i = 0; i < 256; i++)
+                Assert.IsTrue(detail.AddVertexToPrimitive(primitiveIndex, v0));
+
+            int expandedDataLength = detail.PrimitiveDataLength;
+            Assert.Greater(expandedDataLength, initialDataLength);
+
+            Assert.IsTrue(detail.RemovePrimitive(primitiveIndex));
+            Assert.AreEqual(0, detail.PrimitiveDataLength);
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void RemovingVertexAfterPrimitiveMutationKeepsAdjacencyConsistent()
+    {
+        var detail = new NativeDetail(16, Allocator.Temp);
+        try
+        {
+            int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
+            int p1 = detail.AddPoint(new float3(1f, 0f, 0f));
+            int p2 = detail.AddPoint(new float3(1f, 1f, 0f));
+            int p3 = detail.AddPoint(new float3(0f, 1f, 0f));
+
+            int v0 = detail.AddVertex(p0);
+            int v1 = detail.AddVertex(p1);
+            int v2 = detail.AddVertex(p2);
+            int v3 = detail.AddVertex(p3);
+
+            using var triA = new NativeArray<int>(new[] { v0, v1, v2 }, Allocator.Temp);
+            using var triB = new NativeArray<int>(new[] { v0, v2, v3 }, Allocator.Temp);
+
+            int primitiveA = detail.AddPrimitive(triA);
+            int primitiveB = detail.AddPrimitive(triB);
+
+            Assert.IsTrue(detail.RemovePrimitive(primitiveA));
+            Assert.IsTrue(detail.RemoveVertex(v1));
+            Assert.IsTrue(detail.IsPrimitiveAlive(primitiveB));
+            Assert.AreEqual(3, detail.GetPrimitiveVertexCount(primitiveB));
+
+            Assert.IsTrue(detail.RemoveVertex(v0));
+            Assert.IsFalse(detail.IsPrimitiveAlive(primitiveB));
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void RemovingPointWithMultipleVerticesRemovesAllIncidentPrimitives()
+    {
+        var detail = new NativeDetail(16, Allocator.Temp);
+        try
+        {
+            int sharedPoint = detail.AddPoint(new float3(0f, 0f, 0f));
+            int p1 = detail.AddPoint(new float3(1f, 0f, 0f));
+            int p2 = detail.AddPoint(new float3(0f, 1f, 0f));
+            int p3 = detail.AddPoint(new float3(-1f, 0f, 0f));
+            int p4 = detail.AddPoint(new float3(0f, -1f, 0f));
+
+            int sharedVertexA = detail.AddVertex(sharedPoint);
+            int sharedVertexB = detail.AddVertex(sharedPoint);
+            int v1 = detail.AddVertex(p1);
+            int v2 = detail.AddVertex(p2);
+            int v3 = detail.AddVertex(p3);
+            int v4 = detail.AddVertex(p4);
+
+            using var triA = new NativeArray<int>(new[] { sharedVertexA, v1, v2 }, Allocator.Temp);
+            using var triB = new NativeArray<int>(new[] { sharedVertexB, v3, v4 }, Allocator.Temp);
+
+            int primitiveA = detail.AddPrimitive(triA);
+            int primitiveB = detail.AddPrimitive(triB);
+
+            Assert.IsTrue(detail.RemovePoint(sharedPoint));
+
+            Assert.IsFalse(detail.IsVertexAlive(sharedVertexA));
+            Assert.IsFalse(detail.IsVertexAlive(sharedVertexB));
+            Assert.IsFalse(detail.IsPrimitiveAlive(primitiveA));
+            Assert.IsFalse(detail.IsPrimitiveAlive(primitiveB));
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void RemovingVertexAfterDensePopulateRebuildsAdjacencyCache()
+    {
+        var detail = new NativeDetail(8, Allocator.Temp);
+        try
+        {
+            SangriaMeshSphereGenerator.PopulateUvSphere(ref detail, 0.5f, 8, 6);
+            int initialVertexCount = detail.VertexCount;
+
+            Assert.IsTrue(detail.IsVertexAlive(0));
+            Assert.IsTrue(detail.RemoveVertex(0));
+            Assert.AreEqual(initialVertexCount - 1, detail.VertexCount);
+
+            var compiled = detail.Compile(Allocator.Temp);
+            try
+            {
+                Assert.AreEqual(detail.VertexCount, compiled.VertexCount);
+            }
+            finally
+            {
+                compiled.Dispose();
+            }
+        }
+        finally
+        {
+            detail.Dispose();
+        }
     }
 
     [Test]

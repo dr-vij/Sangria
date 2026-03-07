@@ -21,6 +21,7 @@ namespace SangriaMesh
         private readonly int m_DefaultPrimitiveCapacity;
         private int m_TotalLength;
         private bool m_IsDenseTriangleLayout;
+        private int m_GarbageLength;
 
         public int RecordCapacity => m_Records.Length;
         public int DataLength => m_Data.Length;
@@ -39,6 +40,7 @@ namespace SangriaMesh
             m_Data = new NativeList<int>(primCapacity * m_DefaultPrimitiveCapacity, allocator);
             m_TotalLength = 0;
             m_IsDenseTriangleLayout = false;
+            m_GarbageLength = 0;
         }
 
         public void EnsureRecordSlot(int primitiveIndex)
@@ -85,6 +87,7 @@ namespace SangriaMesh
                 m_Data.Resize(0, NativeArrayOptions.ClearMemory);
                 m_Records.Resize(0, NativeArrayOptions.ClearMemory);
                 m_TotalLength = 0;
+                m_GarbageLength = 0;
                 return;
             }
 
@@ -107,6 +110,7 @@ namespace SangriaMesh
 
             m_TotalLength = requiredDataLength;
             m_IsDenseTriangleLayout = true;
+            m_GarbageLength = 0;
         }
 
         public int* GetDataPointerUnchecked()
@@ -235,24 +239,22 @@ namespace SangriaMesh
                 return;
 
             m_TotalLength -= record.Length;
+            m_GarbageLength += record.Capacity;
+            record.Start = -1;
             record.Length = 0;
+            record.Capacity = 0;
             m_Records[primitiveIndex] = record;
             m_IsDenseTriangleLayout = false;
+            TryCompactGarbage();
         }
 
         public void Clear()
         {
-            int recordCount = m_Records.Length;
-            if (recordCount > 0)
-            {
-                var recordsArray = m_Records.AsArray();
-                PrimitiveRecord* recordsPtr = (PrimitiveRecord*)NativeArrayUnsafeUtility.GetUnsafePtr(recordsArray);
-                for (int i = 0; i < recordCount; i++)
-                    recordsPtr[i].Length = 0;
-            }
-
+            m_Data.Resize(0, NativeArrayOptions.ClearMemory);
+            m_Records.Resize(0, NativeArrayOptions.ClearMemory);
             m_TotalLength = 0;
             m_IsDenseTriangleLayout = false;
+            m_GarbageLength = 0;
         }
 
         public void Dispose()
@@ -298,9 +300,67 @@ namespace SangriaMesh
             if (record.Length > 0)
                 NativeArray<int>.Copy(m_Data.AsArray(), record.Start, m_Data.AsArray(), newStart, record.Length);
 
+            m_GarbageLength += record.Capacity;
             record.Start = newStart;
             record.Capacity = newCap;
             m_Records[primitiveIndex] = record;
+
+            TryCompactGarbage();
+        }
+
+        private void TryCompactGarbage()
+        {
+            if (m_GarbageLength <= 0)
+                return;
+            if (m_Data.Length <= 0)
+            {
+                m_GarbageLength = 0;
+                return;
+            }
+
+            // Compact when garbage reaches at least half of allocated data.
+            if (m_GarbageLength * 2 < m_Data.Length)
+                return;
+
+            int recordCount = m_Records.Length;
+            int requiredLength = 0;
+            for (int i = 0; i < recordCount; i++)
+            {
+                var record = m_Records[i];
+                if (record.Start < 0 || record.Capacity <= 0)
+                    continue;
+
+                requiredLength += record.Capacity;
+            }
+
+            var newData = new NativeList<int>(math_max(1, requiredLength), m_Allocator);
+            if (requiredLength > 0)
+                newData.Resize(requiredLength, NativeArrayOptions.UninitializedMemory);
+
+            int writeCursor = 0;
+            for (int i = 0; i < recordCount; i++)
+            {
+                var record = m_Records[i];
+                if (record.Start < 0 || record.Capacity <= 0)
+                {
+                    record.Start = -1;
+                    record.Length = 0;
+                    record.Capacity = 0;
+                    m_Records[i] = record;
+                    continue;
+                }
+
+                if (record.Length > 0)
+                    NativeArray<int>.Copy(m_Data.AsArray(), record.Start, newData.AsArray(), writeCursor, record.Length);
+
+                record.Start = writeCursor;
+                m_Records[i] = record;
+                writeCursor += record.Capacity;
+            }
+
+            m_Data.Dispose();
+            m_Data = newData;
+            m_GarbageLength = 0;
         }
 
         private static int math_max(int a, int b) => a > b ? a : b;
