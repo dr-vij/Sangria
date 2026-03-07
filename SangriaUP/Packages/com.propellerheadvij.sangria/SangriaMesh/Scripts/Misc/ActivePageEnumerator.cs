@@ -1,6 +1,6 @@
 using Unity.Collections;
 
-namespace PropellerheadMesh
+namespace SangriaMesh
 {
     public struct ActivePageEnumerator
     {
@@ -20,9 +20,7 @@ namespace PropellerheadMesh
         }
 
         public PageInfo CurrentPageInfo => m_ActivePages[m_CurrentIndex];
-        
         public int CurrentIndex => m_CurrentIndex;
-
         public ActivePageEnumerator GetEnumerator() => this;
     }
 }
