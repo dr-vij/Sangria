@@ -134,52 +134,96 @@ namespace SangriaMesh
 
                 int* vertexRemapPtr = (int*)NativeArrayUnsafeUtility.GetUnsafePtr(vertexRemap);
                 int vertexRemapLength = vertexRemap.Length;
+                var vertexToPointSparse = m_VertexToPoint.AsArray();
+                int* vertexToPointSparsePtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(vertexToPointSparse);
 
                 if (!pointsIdentityRemap)
                 {
-                    int pointMax = m_Points.MaxIndexExclusive;
-                    int densePoint = 0;
-                    for (int sparsePoint = 0; sparsePoint < pointMax; sparsePoint++)
-                    {
-                        if (!m_Points.IsAlive(sparsePoint))
-                            continue;
+                    m_Points.GetAliveIndices(alivePoints);
 
-                        alivePoints.Add(sparsePoint);
-                        pointRemapPtr[sparsePoint] = densePoint + 1;
-                        densePoint++;
+                    var alivePointsArray = alivePoints.AsArray();
+                    int alivePointCount = alivePointsArray.Length;
+                    if (alivePointCount > 0)
+                    {
+                        int* alivePointsPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(alivePointsArray);
+                        for (int densePoint = 0; densePoint < alivePointCount; densePoint++)
+                        {
+                            int sparsePoint = alivePointsPtr[densePoint];
+                            pointRemapPtr[sparsePoint] = densePoint + 1;
+                        }
                     }
                 }
 
                 var vertexToPointDense = new NativeArray<int>(vertexCount, allocator, NativeArrayOptions.UninitializedMemory);
                 int* vertexToPointDensePtr = (int*)NativeArrayUnsafeUtility.GetUnsafePtr(vertexToPointDense);
-                int vertexMax = m_Vertices.MaxIndexExclusive;
-                int denseVertex = 0;
-                for (int sparseVertex = 0; sparseVertex < vertexMax; sparseVertex++)
+
+                if (verticesDenseContiguous)
                 {
-                    if (!m_Vertices.IsAlive(sparseVertex))
-                        continue;
-
-                    if (!verticesDenseContiguous)
-                        aliveVertices.Add(sparseVertex);
-
-                    vertexRemapPtr[sparseVertex] = denseVertex + 1;
-
-                    int sparsePoint = m_VertexToPoint[sparseVertex];
-                    int mappedPoint = -1;
-                    if (pointsIdentityRemap)
+                    for (int sparseVertex = 0; sparseVertex < vertexCount; sparseVertex++)
                     {
-                        if ((uint)sparsePoint < (uint)pointCount)
-                            mappedPoint = sparsePoint;
-                    }
-                    else if ((uint)sparsePoint < (uint)pointRemapLength)
-                    {
-                        int remappedPoint = pointRemapPtr[sparsePoint];
-                        if (remappedPoint != 0)
-                            mappedPoint = remappedPoint - 1;
-                    }
+                        vertexRemapPtr[sparseVertex] = sparseVertex + 1;
 
-                    vertexToPointDensePtr[denseVertex] = mappedPoint;
-                    denseVertex++;
+                        int sparsePoint = vertexToPointSparsePtr[sparseVertex];
+                        int mappedPoint = -1;
+                        if (pointsIdentityRemap)
+                        {
+                            if ((uint)sparsePoint < (uint)pointCount)
+                                mappedPoint = sparsePoint;
+                        }
+                        else if ((uint)sparsePoint < (uint)pointRemapLength)
+                        {
+                            int remappedPoint = pointRemapPtr[sparsePoint];
+                            if (remappedPoint != 0)
+                                mappedPoint = remappedPoint - 1;
+                        }
+
+                        vertexToPointDensePtr[sparseVertex] = mappedPoint;
+                    }
+                }
+                else
+                {
+                    m_Vertices.GetAliveIndices(aliveVertices);
+
+                    var aliveVerticesArray = aliveVertices.AsArray();
+                    int aliveVertexCount = aliveVerticesArray.Length;
+                    if (aliveVertexCount > 0)
+                    {
+                        int* aliveVerticesPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(aliveVerticesArray);
+                        for (int denseVertex = 0; denseVertex < aliveVertexCount; denseVertex++)
+                        {
+                            int sparseVertex = aliveVerticesPtr[denseVertex];
+                            vertexRemapPtr[sparseVertex] = denseVertex + 1;
+
+                            int sparsePoint = vertexToPointSparsePtr[sparseVertex];
+                            int mappedPoint = -1;
+                            if (pointsIdentityRemap)
+                            {
+                                if ((uint)sparsePoint < (uint)pointCount)
+                                    mappedPoint = sparsePoint;
+                            }
+                            else if ((uint)sparsePoint < (uint)pointRemapLength)
+                            {
+                                int remappedPoint = pointRemapPtr[sparsePoint];
+                                if (remappedPoint != 0)
+                                    mappedPoint = remappedPoint - 1;
+                            }
+
+                            vertexToPointDensePtr[denseVertex] = mappedPoint;
+                        }
+                    }
+                }
+
+                if (!primitivesDenseContiguous)
+                    m_Primitives.GetAliveIndices(alivePrimitives);
+
+                int* alivePrimitivesPtr = null;
+                int alivePrimitiveCount = 0;
+                if (!primitivesDenseContiguous)
+                {
+                    var alivePrimitivesArray = alivePrimitives.AsArray();
+                    alivePrimitiveCount = alivePrimitivesArray.Length;
+                    if (alivePrimitiveCount > 0)
+                        alivePrimitivesPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(alivePrimitivesArray);
                 }
 
                 int totalPrimitiveVertexCount = 0;
@@ -235,14 +279,9 @@ namespace SangriaMesh
                     }
                     else
                     {
-                        int primitiveMax = m_Primitives.MaxIndexExclusive;
-                        for (int sparsePrimitive = 0; sparsePrimitive < primitiveMax; sparsePrimitive++)
+                        for (int i = 0; i < alivePrimitiveCount; i++)
                         {
-                            if (!m_Primitives.IsAlive(sparsePrimitive))
-                                continue;
-
-                            alivePrimitives.Add(sparsePrimitive);
-
+                            int sparsePrimitive = alivePrimitivesPtr[i];
                             PrimitiveRecord record = primitiveRecordsPtr[sparsePrimitive];
                             int validCount = 0;
                             int dataCursor = record.Start;
@@ -324,11 +363,11 @@ namespace SangriaMesh
                     }
                     else
                     {
-                        for (int i = 0; i < alivePrimitives.Length; i++)
+                        for (int i = 0; i < alivePrimitiveCount; i++)
                         {
                             primitiveOffsetsPtr[i] = runningOffset;
 
-                            int sparsePrimitive = alivePrimitives[i];
+                            int sparsePrimitive = alivePrimitivesPtr[i];
                             PrimitiveRecord record = primitiveRecordsPtr[sparsePrimitive];
                             int dataCursor = record.Start;
                             for (int k = 0; k < record.Length; k++)

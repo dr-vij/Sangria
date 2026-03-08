@@ -1,6 +1,7 @@
 using System;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Mathematics;
 
 namespace SangriaMesh
 {
@@ -108,7 +109,7 @@ namespace SangriaMesh
 
         public bool IsAlive(int index)
         {
-            return index >= 0 && index < m_Capacity && m_Alive.IsSet(index);
+            return (uint)index < (uint)m_NextUnusedIndex && m_Alive.IsSet(index);
         }
 
         public bool IsHandleValid(ElementHandle handle)
@@ -133,10 +134,26 @@ namespace SangriaMesh
         public void GetAliveIndices(NativeList<int> output)
         {
             output.Clear();
-            for (int i = 0; i < m_NextUnusedIndex; i++)
+
+            int usedCount = m_NextUnusedIndex;
+            if (usedCount <= 0)
+                return;
+
+            var alive = m_Alive.AsReadOnly();
+            int fullWordCount = usedCount >> 6;
+            int tailBitCount = usedCount & 63;
+
+            for (int wordIndex = 0; wordIndex < fullWordCount; wordIndex++)
             {
-                if (m_Alive.IsSet(i))
-                    output.Add(i);
+                ulong bits = alive.GetBits(wordIndex << 6, 64);
+                AppendSetBits(output, bits, wordIndex << 6);
+            }
+
+            if (tailBitCount > 0)
+            {
+                int baseIndex = fullWordCount << 6;
+                ulong bits = alive.GetBits(baseIndex, tailBitCount);
+                AppendSetBits(output, bits, baseIndex);
             }
         }
 
@@ -233,6 +250,16 @@ namespace SangriaMesh
             var generationsArray = m_Generations.AsArray();
             byte* dst = (byte*)NativeArrayUnsafeUtility.GetUnsafePtr(generationsArray) + start * UnsafeUtility.SizeOf<uint>();
             UnsafeUtility.MemClear(dst, count * UnsafeUtility.SizeOf<uint>());
+        }
+
+        private static void AppendSetBits(NativeList<int> output, ulong bits, int baseIndex)
+        {
+            while (bits != 0)
+            {
+                int bitOffset = math.tzcnt(bits);
+                output.Add(baseIndex + bitOffset);
+                bits &= bits - 1;
+            }
         }
 
         private static int math_max(int a, int b) => a > b ? a : b;

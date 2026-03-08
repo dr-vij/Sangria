@@ -613,6 +613,10 @@ namespace SangriaMesh
 
             var data = new NativeArray<byte>(math_max(1, totalBytes), allocator, NativeArrayOptions.UninitializedMemory);
             byte* basePtr = (byte*)NativeArrayUnsafeUtility.GetUnsafePtr(data);
+            var aliveSparseIndicesArray = aliveSparseIndices.AsArray();
+            int* aliveSparseIndicesPtr = elementCount > 0
+                ? (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(aliveSparseIndicesArray)
+                : null;
 
             int runningOffset = 0;
             for (int i = 0; i < attributeCount; i++)
@@ -632,7 +636,7 @@ namespace SangriaMesh
 
                 for (int k = 0; k < elementCount; k++)
                 {
-                    int sparseIndex = aliveSparseIndices[k];
+                    int sparseIndex = aliveSparseIndicesPtr[k];
                     byte* src = column.Buffer.Ptr + sparseIndex * column.Stride;
                     byte* dst = basePtr + runningOffset + k * column.Stride;
                     UnsafeUtility.MemCpy(dst, src, column.Stride);
