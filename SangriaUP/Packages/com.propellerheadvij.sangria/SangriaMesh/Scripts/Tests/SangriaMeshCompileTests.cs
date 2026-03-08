@@ -185,4 +185,67 @@ public class SangriaMeshCompileTests
             detail.Dispose();
         }
     }
+
+    [Test]
+    public void CompileSparseHandlesLargeHolePatternAcrossBitWordBoundaries()
+    {
+        var detail = new NativeDetail(320, Allocator.Temp);
+        var pointIndices = new NativeArray<int>(260, Allocator.Temp);
+
+        try
+        {
+            for (int i = 0; i < pointIndices.Length; i++)
+            {
+                int point = detail.AddPoint(new float3(i, 0f, 0f));
+                pointIndices[i] = point;
+                int vertex = detail.AddVertex(point);
+                Assert.GreaterOrEqual(vertex, 0);
+            }
+
+            int[] removedPoints =
+            {
+                0, 1, 2,
+                63, 64, 65,
+                126, 127, 128,
+                191, 192, 193,
+                255, 256, 257
+            };
+
+            for (int i = 0; i < removedPoints.Length; i++)
+            {
+                int pointToRemove = pointIndices[removedPoints[i]];
+                Assert.IsTrue(detail.RemovePoint(
+                    pointToRemove,
+                    PointDeletePolicy.DeleteIncidentVertices,
+                    VertexDeletePolicy.RemoveFromIncidentPrimitives));
+            }
+
+            var compiled = detail.Compile(Allocator.Temp);
+            try
+            {
+                Assert.AreEqual(detail.PointCount, compiled.PointCount);
+                Assert.AreEqual(detail.VertexCount, compiled.VertexCount);
+                Assert.AreEqual(detail.PrimitiveCount, compiled.PrimitiveCount);
+                Assert.AreEqual(1, compiled.PrimitiveOffsetsDense.Length);
+                Assert.AreEqual(0, compiled.PrimitiveOffsetsDense[0]);
+
+                for (int i = 0; i < compiled.VertexToPointDense.Length; i++)
+                {
+                    int densePoint = compiled.VertexToPointDense[i];
+                    Assert.GreaterOrEqual(densePoint, 0);
+                    Assert.Less(densePoint, compiled.PointCount);
+                }
+            }
+            finally
+            {
+                compiled.Dispose();
+            }
+        }
+        finally
+        {
+            if (pointIndices.IsCreated)
+                pointIndices.Dispose();
+            detail.Dispose();
+        }
+    }
 }

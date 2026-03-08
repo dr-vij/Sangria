@@ -133,28 +133,44 @@ namespace SangriaMesh
 
         public void GetAliveIndices(NativeList<int> output)
         {
-            output.Clear();
-
             int usedCount = m_NextUnusedIndex;
             if (usedCount <= 0)
+            {
+                output.Clear();
                 return;
+            }
 
             var alive = m_Alive.AsReadOnly();
             int fullWordCount = usedCount >> 6;
             int tailBitCount = usedCount & 63;
+            int aliveCount = CountSetBits(alive, fullWordCount, tailBitCount);
+
+            if (aliveCount <= 0)
+            {
+                output.Clear();
+                return;
+            }
+
+            output.Resize(aliveCount, NativeArrayOptions.UninitializedMemory);
+            var outputArray = output.AsArray();
+            int* outputPtr = (int*)NativeArrayUnsafeUtility.GetUnsafePtr(outputArray);
+            int writeCursor = 0;
 
             for (int wordIndex = 0; wordIndex < fullWordCount; wordIndex++)
             {
                 ulong bits = alive.GetBits(wordIndex << 6, 64);
-                AppendSetBits(output, bits, wordIndex << 6);
+                AppendSetBits(outputPtr, ref writeCursor, bits, wordIndex << 6);
             }
 
             if (tailBitCount > 0)
             {
                 int baseIndex = fullWordCount << 6;
                 ulong bits = alive.GetBits(baseIndex, tailBitCount);
-                AppendSetBits(output, bits, baseIndex);
+                AppendSetBits(outputPtr, ref writeCursor, bits, baseIndex);
             }
+
+            if (writeCursor != aliveCount)
+                output.Resize(writeCursor, NativeArrayOptions.UninitializedMemory);
         }
 
         public void EnsureCapacity(int requiredCapacity)
@@ -252,12 +268,27 @@ namespace SangriaMesh
             UnsafeUtility.MemClear(dst, count * UnsafeUtility.SizeOf<uint>());
         }
 
-        private static void AppendSetBits(NativeList<int> output, ulong bits, int baseIndex)
+        private static int CountSetBits(NativeBitArray.ReadOnly alive, int fullWordCount, int tailBitCount)
+        {
+            int aliveCount = 0;
+            for (int wordIndex = 0; wordIndex < fullWordCount; wordIndex++)
+                aliveCount += math.countbits(alive.GetBits(wordIndex << 6, 64));
+
+            if (tailBitCount > 0)
+            {
+                int baseIndex = fullWordCount << 6;
+                aliveCount += math.countbits(alive.GetBits(baseIndex, tailBitCount));
+            }
+
+            return aliveCount;
+        }
+
+        private static void AppendSetBits(int* outputPtr, ref int writeCursor, ulong bits, int baseIndex)
         {
             while (bits != 0)
             {
                 int bitOffset = math.tzcnt(bits);
-                output.Add(baseIndex + bitOffset);
+                outputPtr[writeCursor++] = baseIndex + bitOffset;
                 bits &= bits - 1;
             }
         }
