@@ -64,3 +64,4 @@ This README documents the **current** state of the new core and where it interse
 
 - Architecture and file-level behavior: [ARCHITECTURE.md](./ARCHITECTURE.md)
 - Current development review and performance roadmap: [CodeReview.md](./CodeReview.md)
+- Detailed execution roadmap and benchmark targets: [ROADMAP.md](./ROADMAP.md)
