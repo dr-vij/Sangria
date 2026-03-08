@@ -49,6 +49,7 @@ namespace SangriaMesh
                 return CoreResult.Success;
             }
 
+            EnsureResourceCapacityForInsert();
             var entry = CreateEntry<T>(typeHash, sizeBytes);
             T newValue = value;
             UnsafeUtility.CopyStructureToPtr(ref newValue, entry.Buffer.Ptr);
@@ -165,6 +166,19 @@ namespace SangriaMesh
             }
 
             m_IsDisposed = true;
+        }
+
+        private void EnsureResourceCapacityForInsert()
+        {
+            int required = m_Resources.Count() + 1;
+            if (required <= m_Resources.Capacity)
+                return;
+
+            int newCapacity = math_max(1, m_Resources.Capacity);
+            while (newCapacity < required)
+                newCapacity *= 2;
+
+            m_Resources.Capacity = newCapacity;
         }
 
         private ResourceEntry CreateEntry<T>(int typeHash, int sizeBytes) where T : unmanaged

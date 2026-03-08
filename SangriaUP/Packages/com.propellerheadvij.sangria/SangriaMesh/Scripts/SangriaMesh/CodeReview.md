@@ -1,178 +1,374 @@
-# SangriaMesh Core Review (Updated)
+# SangriaMesh Code Review (Deep Pass)
 
 Date: 2026-03-08  
-Scope: `Packages/com.propellerheadvij.sangria/SangriaMesh/Scripts/SangriaMesh` and `Scripts/Generators` in `namespace SangriaMesh` only.  
-Explicitly excluded: `Scripts-legacy`, `ViJMeshTools`, and any legacy cutter/tessellation code paths.
+Scope: `Packages/com.propellerheadvij.sangria/SangriaMesh/Scripts/**` only.  
+Excluded intentionally: `Scripts-legacy/**`, `Legacy/**`, and `ViJMeshTools` stack.
 
-## Executive Summary
+## 1. Executive Summary
 
-The core is in a much better state than in the previous pass.  
-The two most dangerous correctness risks (stale attribute handles and generation reset in dense allocation) are fixed.  
-The four high-priority items from the last report are also now addressed in code:
+This review confirms that the **new SangriaMesh core** is already a strong foundation for Unity-oriented runtime mesh workflows:
 
-1. Attribute/resource schema changes now update `AttributeVersion`.
-2. Dense topology allocation now clears custom attribute ranges explicitly.
-3. `PrimitiveStorage` now has garbage tracking and compaction behavior.
-4. Vertex/point deletion no longer depends on global full scans; adjacency caches were introduced.
+- clean domain model (`Point`, `Vertex`, `Primitive`)
+- handle-based mutable topology (`SparseHandleSet` + generations)
+- domain attribute system with typed accessors
+- dense compiled snapshot (`NativeCompiledDetail`) for runtime consumption
+- practical fast path for triangle-only conversion via Unity MeshData
 
-For planned expansion (interactive mesh editing, vertex deletion modes, local topology tools), this is a meaningful step forward.
+At the same time, the current implementation still has several blockers for a robust MVP in production-heavy scenarios:
 
-The remaining risks are mostly about performance predictability and API robustness rather than immediate correctness bugs.
+1. a high-risk polygon triangulation fallback bug (index write cursor safety)
+2. fixed-capacity hash structures without explicit growth safeguards
+3. ownership safety footguns due to mutable structs that own native memory
+4. global attribute id registry limitations for deterministic or concurrent workflows
+5. some residual architecture noise in `Scripts/Misc` (namespace drift / duplicates)
 
-## What Was Fixed Since The Last Revision
+Core message: **the architecture is good, but robustness contracts are not finished yet**. The next MVP stage should focus on hardening and predictability before adding many new operators.
 
-### 1. Handle safety for dynamic attribute schemas
+---
 
-Previously, a removed attribute could leave behind a stale handle that accidentally pointed to another column after internal swap-back.  
-Now, `AttributeStore` checks `AttributeId` in addition to column index and type hash when accessing through a handle.
+## 2. What Is Strong Today
 
-This closes a silent corruption class that was especially dangerous in long editor sessions with dynamic attribute registration.
+### 2.1 Data Model and Layering
 
-Relevant file:
-- `Scripts/SangriaMesh/AttributeStore.cs`
-
-### 2. Generation integrity in dense allocation
-
-Previously, `AllocateDenseRange` could reset generations to `1`, potentially re-validating old handles after clear/rebuild cycles.  
-Now generation is only initialized for zeroed slots, preserving monotonic generation semantics.
-
-Relevant file:
-- `Scripts/SangriaMesh/SparseHandleSet.cs`
-
-### 3. Versioning contract for schema/resource mutations
-
-Previously, `AttributeVersion` mostly reflected value writes, but not schema-level changes (add/remove attribute, set/remove resource).  
-Now successful structural mutations increment `AttributeVersion`, which makes future cache invalidation and incremental compile strategies safer.
-
-Relevant file:
-- `Scripts/SangriaMesh/NativeDetail.cs`
-
-### 4. Explicit attribute range clearing on dense rebuild
-
-`AllocateDenseTopologyUnchecked` now clears point/vertex/primitive attribute ranges for newly alive elements, preventing stale payload leakage between rebuilds.
+The split between mutable authoring (`NativeDetail`) and packed runtime snapshot (`NativeCompiledDetail`) is practical and production-aligned for Unity runtime.
 
 Relevant files:
-- `Scripts/SangriaMesh/AttributeStore.cs`
-- `Scripts/SangriaMesh/NativeDetail.cs`
 
-### 5. Primitive storage reclaim strategy
+- `NativeDetail` root and partials
+- `NativeCompiledDetail`
+- `CompiledAttributeSet`, `CompiledResourceSet`
 
-`PrimitiveStorage` now tracks garbage capacity and compacts data when fragmentation crosses a threshold.  
-It also clears record/data arrays fully on `Clear()`.
+### 2.2 Handle Stability and Slot Reuse Model
 
-This materially improves long-session behavior under repeated topology mutations.
+`SparseHandleSet` generation-based handles are implemented with clear semantics:
 
-Relevant file:
-- `Scripts/SangriaMesh/PrimitiveStorage.cs`
-
-### 6. Adjacency-aware deletion flow
-
-`NativeDetail` now maintains `Point -> Vertices` and `Vertex -> Primitives` maps.  
-Deletion paths (`RemovePoint`, `RemoveVertex`) use these maps, with lazy rebuild when adjacency is marked dirty.
-
-This removes the previous always-global scans and establishes a better base for edit tools.
+- index reuse is guarded by generation increment
+- dense allocation path preserves generation initialization rules
+- explicit alive-bit scanning has efficient bitwise implementation
 
 Relevant file:
-- `Scripts/SangriaMesh/NativeDetail.cs`
 
-## Current State Of The Core (After Fixes)
+- `SparseHandleSet.cs`
 
-### What is now strong
+### 2.3 Attribute/Resource Extensibility
 
-The data model remains clean and practical: points, vertices, primitives, typed attributes, and compiled dense snapshots.  
-With the recent fixes, lifecycle guarantees are significantly stronger, and mutation paths are more consistent with future editing workloads.
+The typed attribute pipeline is well shaped for Burst-friendly access:
 
-The sphere generator and triangle fast path still provide a solid high-throughput route for runtime generation.
+- `AttributeHandle<T>` and `NativeAttributeAccessor<T>` for editable layer
+- `CompiledAttributeAccessor<T>` for packed layer
+- consistent type hash checks
 
-### What still deserves attention
+Relevant files:
 
-The core is now safer, but not yet fully optimized for large interactive edit sessions.  
-The remaining work is more about predictability under load than correctness blockers.
+- `AttributeStore.cs`
+- `NativeAttributeAccessor.cs`
+- `CompiledAttributeAccessor.cs`
 
-## Open Findings (Current)
+### 2.4 Practical Runtime Throughput Route
 
-### High: synchronous compaction can create frame-time spikes
+For triangle-only topology, `FillUnityMeshTriangles` is significantly stronger than the generic path:
 
-`PrimitiveStorage` compaction is currently in-band and threshold-triggered.  
-That is simple and valid, but if a large mesh crosses the threshold during interactive editing, compaction cost is paid immediately in that mutation call.
+- direct MeshData API
+- low abstraction overhead
+- optional normals/uv streams
 
-Why this matters:
-- You avoid unbounded memory growth, but you may introduce occasional latency spikes.
+Relevant file:
 
-Suggested next step:
-- Add an explicit `Compact()` API and/or deferred compaction policy (for example, run only at controlled sync points).
+- `SangriaMeshUnityMeshExtensions.cs`
 
-### High: adjacency map updates are robust but still allocation/work heavy in hot mutation loops
+### 2.5 Tests Coverage Baseline
 
-The new adjacency model is a clear improvement over global scans.  
-However, key-level removals currently rebuild value lists for that key (`remove + re-add kept values` pattern), which can still be expensive for high-valence vertices.
+There is meaningful tests coverage inside `Scripts/Tests` for:
 
-Why this matters:
-- Better asymptotics than full scans, but frequent local edits on dense hubs can still become costly.
+- sparse compile remapping
+- deletion policies
+- adjacency consistency
+- garbage collection behavior in primitive storage
+- dense rebuild safety regressions
 
-Suggested next step:
-- Introduce a lighter-weight adjacency entry structure with direct remove support or pooled scratch buffers to reduce per-mutation work.
+That is a good base for hardening work.
 
-### Medium: compile path is still full snapshot rebuild
+---
 
-`Compile()` still rebuilds packed topology + attributes + resources every call.  
-With the new versioning and safer contracts, the codebase is now better prepared for incremental compilation, but it is not implemented yet.
+## 3. Findings (ordered by severity)
 
-Why this matters:
-- In node graphs with micro-edits, cost remains proportional to total mesh size.
+## 3.1 High — Polygon conversion can overrun preallocated index buffer in fallback path
 
-Suggested next step:
-- Track dirty ranges per domain and patch only modified spans in compiled buffers.
+### Where
 
-### Medium: polygon conversion path remains managed and non-linear
+- `SangriaMeshUnityMeshExtensions.cs`:
+  - triangulation write inside ear clipping
+  - fallback to fan triangulation on failure
 
-General polygon triangulation in `SangriaMeshUnityMeshExtensions` is still managed and relatively expensive compared to triangle-only conversion.
+### Why this is dangerous
 
-Why this matters:
-- For mixed topology workloads, this can dominate conversion time and allocation pressure.
+In `FillUnityMeshInternal`, a fixed-size `triangles` array is preallocated as `(n-2)*3` per polygon primitive.  
+`TryTriangulateEarClip(...)` writes triangles **incrementally** into that shared array. If ear clipping later fails (returns `false`), caller switches to fan fallback, but does not rollback `triangleWriteIndex` to the start of the current primitive.
 
-Suggested next step:
-- Keep current path for correctness fallback, but add a faster native/Burst triangulation route for common polygon cases.
+If any triangle was already written before failure, fallback writes additional triangles for the same primitive and can exceed the preallocated range or corrupt subsequent primitive data.
 
-### Medium: `NativeCompiledDetail` ownership model is still easy to misuse
+### Risk profile
 
-`NativeCompiledDetail` remains a mutable struct owning native memory.  
-This works, but value-copy accidents can still lead to disposal mistakes in downstream usage.
+- Severity: high correctness and stability risk.
+- Trigger probability: medium on malformed/self-intersecting or numerically unstable polygons.
+- Runtime impact: potential out-of-range writes / exceptions in managed path.
 
-Why this matters:
-- It is a reliability footgun for external consumers of the API.
+### Recommendation
 
-Suggested next step:
-- Consider a safer ownership wrapper or stricter usage pattern documentation.
+For each primitive in polygon path:
 
-## Test Coverage Added For This Iteration
+1. capture `int primitiveStartWrite = triangleWriteIndex`
+2. call ear clipping
+3. if ear clipping fails, set `triangleWriteIndex = primitiveStartWrite` before fan fallback
 
-The following tests were added to cover the latest fixes:
+Additionally:
 
-- `AttributeVersionIncrementsForSchemaAndResourceMutations`
-- `DenseRebuildClearsAllCustomAttributeDomains`
-- `PrimitiveStorageCollectGarbageIsExplicit`
-- `RemovingVertexAfterPrimitiveMutationKeepsAdjacencyConsistent`
-- `RemovingPointWithMultipleVerticesRemovesAllIncidentPrimitives`
-- `RemovingVertexAfterDensePopulateKeepsTopologyConsistent`
+- add a defensive postcondition check that each primitive contributes exactly `(primitiveVertexCount - 2) * 3` indices
+- add tests for partial ear-clip-fail scenarios
 
-Previously added critical tests are still relevant:
+---
 
-- `StaleAttributeHandleIsRejectedAfterRemoveAndReAdd`
-- `PointHandleStaysInvalidAfterDenseRebuildPath`
+## 3.2 Medium — Hash maps rely on initial capacity without explicit growth policy
 
-## Practical Next Steps For Mesh Editing Expansion
+### Where
 
-If the immediate goal is to continue toward robust mesh editing features (vertex delete policies, collapses, local surgery), the most pragmatic sequence is:
+- `AttributeStore` uses `NativeParallelHashMap<int,int>` for id→column mapping
+- `ResourceRegistry` uses `UnsafeParallelHashMap<int, ResourceEntry>`
 
-1. Stabilize adjacency performance and compaction scheduling so mutation latency is predictable.
-2. Add explicit edit-policy APIs (for example, remove vertex with strategy flags).
-3. Introduce incremental compile for small local edits.
-4. Keep polygon conversion as a separate optimization track so topology authoring and mesh conversion concerns do not block each other.
+### Why this matters
 
-This keeps momentum on functionality while reducing the chance of regressions in large real scenes.
+These containers are initialized with estimates (`estimatedAttributeCount`, `initialCapacity`) and inserts happen later. There is no explicit capacity growth policy in code around insertion points.
+
+In real projects with dynamic schemas/resources, this can lead to insertion failures or runtime exceptions depending on allocator/container behavior under load.
+
+### Recommendation
+
+Before insertion (`RegisterAttribute`, `SetResource` new-id path):
+
+- ensure map capacity can hold `Count + 1`
+- implement deterministic doubling strategy
+- include tests that intentionally exceed initial capacity
+
+---
+
+## 3.3 Medium — Ownership model is easy to misuse (native-memory-owning mutable structs)
+
+### Where
+
+- `NativeDetail`
+- `NativeCompiledDetail`
+- `CompiledAttributeSet`
+- `CompiledResourceSet`
+
+### Why this matters
+
+All these are mutable `struct` types with `Dispose()`. Value copies can accidentally duplicate ownership handles to native memory. This is a common reliability hazard in Unity native-container ecosystems.
+
+### Recommendation
+
+MVP-safe options:
+
+- provide a documented strict usage contract + analyzers/style checks
+- add `IsCreated`/`IsDisposed` guard methods and fail-fast checks for public methods
+- strongly consider introducing owner wrappers (reference type or explicit owner token patterns) for externally consumed compiled snapshots
+
+---
+
+## 3.4 Medium — Global `AttributeID` registry is not deterministic-safe for all usage modes
+
+### Where
+
+- `AttributeId.cs`
+
+### Why this matters
+
+`AttributeID` is process-global mutable state with runtime-assigned ids:
+
+- non-thread-safe for concurrent registrations
+- id assignment depends on registration order
+- can hurt determinism when external systems serialize/assume stable numeric ids
+
+### Recommendation
+
+For MVP stability:
+
+- split static built-in ids from runtime-registered custom ids
+- enforce explicit deterministic registration phase (single-threaded)
+- optionally provide string-key serialization mode for custom attributes
+
+---
+
+## 3.5 Low — Residual architecture noise inside `Scripts/Misc`
+
+### Where
+
+- duplicate `PageInfo` definitions
+- mixed namespaces (`PropellerheadMesh`, `Legacy.Misc`, `SangriaMesh`) in current Scripts scope
+
+### Why this matters
+
+Not a direct runtime blocker, but increases cognitive and maintenance cost and blurs boundaries of “new core” vs transitional utility code.
+
+### Recommendation
+
+- collapse duplicate `PageInfo` into one canonical type
+- move or rename misc legacy-style namespaces to avoid accidental coupling
+- document intended support status of each misc utility
+
+---
+
+## 4. Gaps in Test Strategy
+
+Current tests are useful, but MVP hardening needs targeted additions:
+
+1. polygon triangulation stress tests with pathological input sets:
+   - nearly collinear vertices
+   - repeated vertices
+   - near-zero area polygons
+   - self-intersections (expected behavior should be explicit)
+2. capacity growth tests for attribute/resource registries
+3. ownership misuse tests:
+   - copied compiled snapshots
+   - double-dispose patterns (ensure predictable fail-fast)
+4. long-session mutation tests:
+   - repeated add/remove/compile loops with periodic `CollectGarbage`
+
+---
+
+## 5. Comparison to CGAL / Blender / Similar Ecosystems
+
+This section compares **engineering profile**, not just feature count.
+
+## 5.1 SangriaMesh vs CGAL
+
+### SangriaMesh strengths
+
+- Unity-native runtime integration (Burst + NativeCollections + MeshData path)
+- lower integration friction for game runtime scenarios
+- compact and understandable core abstraction
+
+### CGAL strengths
+
+- far stronger geometric robustness (exact predicates/kernels)
+- mature algorithms for boolean ops, remeshing, repair, topology processing
+- broader academic and production validation on edge cases
+
+### Gap summary
+
+SangriaMesh is currently optimized for practical runtime authoring/conversion, but does not yet match CGAL-level robustness contracts for difficult geometric operations.
+
+## 5.2 SangriaMesh vs Blender (BMesh ecosystem)
+
+### SangriaMesh strengths
+
+- lean runtime footprint and data path for procedural generation in Unity
+- simpler API surface for programmatic workflows
+
+### Blender strengths
+
+- very mature editing operators and topology manipulation tooling
+- robust handling of many artist-facing edge cases
+- deep ecosystem for mesh cleanup/repair/remesh workflows
+
+### Gap summary
+
+Blender/BMesh remains much richer for interactive editing semantics and operator coverage. SangriaMesh should prioritize a smaller but reliable subset for MVP.
+
+## 5.3 Practical position
+
+SangriaMesh should not attempt to “out-CGAL” or “out-Blender” in one step. The best product strategy is:
+
+- own the Unity runtime-first niche
+- build robust core contracts for that niche
+- optionally bridge to heavy geometry backends for offline/high-quality operations
+
+---
+
+## 6. MVP Improvement Plan (Detailed)
+
+## Stage A — Robustness Hardening (highest priority)
+
+Goal: remove correctness hazards and stabilize API contracts.
+
+1. Fix triangulation rollback bug in polygon conversion path.
+2. Add container capacity growth guards in attribute/resource registries.
+3. Add fail-fast disposal/ownership guards for compiled containers.
+4. Define and document expected behavior on non-simple polygons.
+5. Add targeted tests for all above.
+
+Exit criteria:
+
+- no known index write hazards in conversion path
+- deterministic behavior under oversized dynamic schema/resource registrations
+- explicit behavior and tests for invalid polygon classes
+
+## Stage B — Performance Predictability
+
+Goal: remove latency spikes and full-snapshot overhead where possible.
+
+1. Add optional deferred compaction policy for `PrimitiveStorage`.
+2. Introduce dirty-range tracking to enable incremental compile path.
+3. Keep full compile as fallback; benchmark both.
+4. Reduce managed allocations in generic polygon conversion path.
+
+Exit criteria:
+
+- mutation latency profile is bounded/predictable in long edit sessions
+- compile time scales better with local edits
+
+## Stage C — Editing Operators MVP
+
+Goal: provide a robust minimal editing toolbox.
+
+1. Add explicit topology operators:
+   - edge split
+   - edge collapse
+   - edge/diagonal flip (where valid)
+2. Define attribute propagation policies per operator.
+3. Add topology validity checks as reusable validator utilities.
+
+Exit criteria:
+
+- stable minimal operator set with clear policies and tests
+- no silent attribute corruption during edits
+
+## Stage D — Advanced / Optional Hybrid
+
+Goal: support high-robustness workflows without bloating runtime core.
+
+1. Keep SangriaMesh core lean for runtime.
+2. Add optional offline bridge for heavy operations (e.g., native plugin path using robust geometry backend).
+3. Provide conversion contracts between compiled snapshot and offline processing format.
+
+Exit criteria:
+
+- clear split: fast runtime core vs robust offline toolchain
+
+---
+
+## 7. Recommended Backlog (Concrete Tickets)
+
+1. `SMESH-001`: Ear-clip fallback rollback fix + regression tests.
+2. `SMESH-002`: AttributeStore id-map growth safeguards.
+3. `SMESH-003`: ResourceRegistry map growth safeguards.
+4. `SMESH-004`: Ownership safety guardrail pass for compiled containers.
+5. `SMESH-005`: Polygon validity policy doc + tests.
+6. `SMESH-006`: PrimitiveStorage deferred compaction mode.
+7. `SMESH-007`: Compile dirty-range prototype.
+8. `SMESH-008`: Misc namespace/type cleanup (`PageInfo`, legacy misc names).
+
+---
+
+## 8. Final Assessment
+
+SangriaMesh is already beyond prototype quality in architecture and runtime direction.  
+The immediate bottleneck is not “missing big features,” but **robustness and contract hardening**.
+
+If Stage A is completed first, the project can move into MVP expansion with materially lower regression risk and clearer positioning against larger ecosystems.
+
+---
 
 ## Validation Note
 
-This report is based on static code inspection and the added test set in source.  
-Build/test execution was not run in this review pass.
+This report is based on static code inspection in the declared scope and existing test sources.  
+Build and test execution were not run as part of this review pass.

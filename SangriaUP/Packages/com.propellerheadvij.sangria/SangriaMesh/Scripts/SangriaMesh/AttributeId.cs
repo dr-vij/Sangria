@@ -8,6 +8,7 @@ namespace SangriaMesh
     /// </summary>
     public static class AttributeID
     {
+        private static readonly object s_Lock = new();
         private static readonly Dictionary<string, int> s_NameToId = new();
         private static readonly Dictionary<int, string> s_IdToName = new();
         private static int s_NextId;
@@ -28,25 +29,36 @@ namespace SangriaMesh
         public static readonly int BoneWeights = Register("BoneWeights");
         public static readonly int BlendIndices = Register("BlendIndices");
 
-        public static int Count => s_NameToId.Count;
+        public static int Count
+        {
+            get
+            {
+                lock (s_Lock)
+                    return s_NameToId.Count;
+            }
+        }
 
         public static int Register(string name)
         {
             ValidateAttributeName(name);
             name = name.Trim();
 
-            if (s_NameToId.TryGetValue(name, out int existingId))
-                return existingId;
+            lock (s_Lock)
+            {
+                if (s_NameToId.TryGetValue(name, out int existingId))
+                    return existingId;
 
-            int id = s_NextId++;
-            s_NameToId[name] = id;
-            s_IdToName[id] = name;
-            return id;
+                int id = s_NextId++;
+                s_NameToId[name] = id;
+                s_IdToName[id] = name;
+                return id;
+            }
         }
 
         public static string GetName(int id)
         {
-            return s_IdToName.GetValueOrDefault(id);
+            lock (s_Lock)
+                return s_IdToName.GetValueOrDefault(id);
         }
 
         public static int GetId(string name)
@@ -54,52 +66,72 @@ namespace SangriaMesh
             if (string.IsNullOrWhiteSpace(name))
                 return -1;
 
-            return s_NameToId.GetValueOrDefault(name.Trim(), -1);
+            lock (s_Lock)
+                return s_NameToId.GetValueOrDefault(name.Trim(), -1);
         }
 
         public static bool IsRegistered(int id)
         {
-            return s_IdToName.ContainsKey(id);
+            lock (s_Lock)
+                return s_IdToName.ContainsKey(id);
         }
 
         public static bool IsRegistered(string name)
         {
-            return !string.IsNullOrWhiteSpace(name) && s_NameToId.ContainsKey(name.Trim());
+            if (string.IsNullOrWhiteSpace(name))
+                return false;
+
+            lock (s_Lock)
+                return s_NameToId.ContainsKey(name.Trim());
         }
 
         public static IEnumerable<string> GetAllNames()
         {
-            return s_NameToId.Keys;
+            lock (s_Lock)
+            {
+                var names = new string[s_NameToId.Count];
+                s_NameToId.Keys.CopyTo(names, 0);
+                return names;
+            }
         }
 
         public static IEnumerable<int> GetAllIds()
         {
-            return s_IdToName.Keys;
+            lock (s_Lock)
+            {
+                var ids = new int[s_IdToName.Count];
+                s_IdToName.Keys.CopyTo(ids, 0);
+                return ids;
+            }
         }
 
         public static bool ValidateIntegrity()
         {
-            if (s_NameToId.Count != s_IdToName.Count)
-                return false;
-
-            foreach (var pair in s_NameToId)
+            lock (s_Lock)
             {
-                if (!s_IdToName.TryGetValue(pair.Value, out string name) || name != pair.Key)
+                if (s_NameToId.Count != s_IdToName.Count)
                     return false;
-            }
 
-            foreach (var pair in s_IdToName)
-            {
-                if (!s_NameToId.TryGetValue(pair.Value, out int id) || id != pair.Key)
-                    return false;
-            }
+                foreach (var pair in s_NameToId)
+                {
+                    if (!s_IdToName.TryGetValue(pair.Value, out string name) || name != pair.Key)
+                        return false;
+                }
 
-            return true;
+                foreach (var pair in s_IdToName)
+                {
+                    if (!s_NameToId.TryGetValue(pair.Value, out int id) || id != pair.Key)
+                        return false;
+                }
+
+                return true;
+            }
         }
 
         public static AttributeIdMetrics GetMetrics()
         {
-            return new AttributeIdMetrics(s_NameToId.Count, s_NextId);
+            lock (s_Lock)
+                return new AttributeIdMetrics(s_NameToId.Count, s_NextId);
         }
 
         private static void ValidateAttributeName(string name)

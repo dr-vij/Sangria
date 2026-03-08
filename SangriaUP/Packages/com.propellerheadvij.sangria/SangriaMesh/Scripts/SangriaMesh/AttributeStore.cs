@@ -49,6 +49,8 @@ namespace SangriaMesh
             if (minimumElementCapacity > m_ElementCapacity)
                 EnsureCapacity(minimumElementCapacity);
 
+            EnsureIdMapCapacityForInsert();
+
             int stride = UnsafeUtility.SizeOf<T>();
             int typeHash = BurstRuntime.GetHashCode32<T>();
             int elementCapacity = m_ElementCapacity;
@@ -270,6 +272,19 @@ namespace SangriaMesh
                 m_IdToColumn.Dispose();
 
             m_IsDisposed = true;
+        }
+
+        private void EnsureIdMapCapacityForInsert()
+        {
+            int required = m_IdToColumn.Count() + 1;
+            if (required <= m_IdToColumn.Capacity)
+                return;
+
+            int newCapacity = math_max(1, m_IdToColumn.Capacity);
+            while (newCapacity < required)
+                newCapacity *= 2;
+
+            m_IdToColumn.Capacity = newCapacity;
         }
 
         private static int math_max(int a, int b) => a > b ? a : b;

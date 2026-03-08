@@ -19,6 +19,8 @@ public class SangriaMeshCoreTests
     private const int DenseClearPointAttribute = 7101;
     private const int DenseClearVertexAttribute = 7102;
     private const int DenseClearPrimitiveAttribute = 7103;
+    private const int GrowthPointAttributeBase = 7200;
+    private const int GrowthResourceBase = 7300;
 
     private struct TestResource
     {
@@ -259,6 +261,55 @@ public class SangriaMeshCoreTests
     }
 
     [Test]
+    public void RegisteringManyPointAttributesGrowsInternalMapCapacity()
+    {
+        var detail = new NativeDetail(4, Allocator.Temp);
+        try
+        {
+            const int attributeCount = 96;
+            for (int i = 0; i < attributeCount; i++)
+            {
+                int attributeId = GrowthPointAttributeBase + i;
+                Assert.AreEqual(CoreResult.Success, detail.AddPointAttribute<float>(attributeId));
+                Assert.IsTrue(detail.HasPointAttribute(attributeId));
+            }
+
+            int pointIndex = detail.AddPoint(new float3(1f, 2f, 3f));
+            int sampleAttributeId = GrowthPointAttributeBase + attributeCount - 1;
+            Assert.AreEqual(CoreResult.Success, detail.TryGetPointAttributeHandle<float>(sampleAttributeId, out var handle));
+            Assert.AreEqual(CoreResult.Success, detail.TrySetPointAttribute(pointIndex, handle, 42f));
+            Assert.AreEqual(CoreResult.Success, detail.TryGetPointAttribute(pointIndex, handle, out float value));
+            Assert.AreEqual(42f, value);
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void RegisteringManyResourcesGrowsInternalMapCapacity()
+    {
+        var detail = new NativeDetail(2, Allocator.Temp);
+        try
+        {
+            const int resourceCount = 128;
+            for (int i = 0; i < resourceCount; i++)
+                Assert.AreEqual(CoreResult.Success, detail.SetResource(GrowthResourceBase + i, i * 3));
+
+            for (int i = 0; i < resourceCount; i++)
+            {
+                Assert.AreEqual(CoreResult.Success, detail.TryGetResource<int>(GrowthResourceBase + i, out int value));
+                Assert.AreEqual(i * 3, value);
+            }
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
     public void LateRegisteredPointAttributeIsZeroInitialized()
     {
         var detail = new NativeDetail(4, Allocator.Temp);
@@ -322,9 +373,9 @@ public class SangriaMeshCoreTests
                 Assert.AreEqual(3, mesh.normals.Length);
                 Assert.AreEqual(3, mesh.uv.Length);
 
-                Assert.AreEqual(new Vector3(0f, 0f, 0f), mesh.vertices[0]);
-                Assert.AreEqual(new Vector3(1f, 0f, 0f), mesh.vertices[1]);
-                Assert.AreEqual(new Vector3(0f, 1f, 0f), mesh.vertices[2]);
+                Assert.AreEqual(new float3(0f, 0f, 0f), new float3(mesh.vertices[0].x, mesh.vertices[0].y, mesh.vertices[0].z));
+                Assert.AreEqual(new float3(1f, 0f, 0f), new float3(mesh.vertices[1].x, mesh.vertices[1].y, mesh.vertices[1].z));
+                Assert.AreEqual(new float3(0f, 1f, 0f), new float3(mesh.vertices[2].x, mesh.vertices[2].y, mesh.vertices[2].z));
 
                 Assert.AreEqual(0, mesh.triangles[0]);
                 Assert.AreEqual(1, mesh.triangles[1]);
@@ -347,10 +398,10 @@ public class SangriaMeshCoreTests
         var detail = new NativeDetail(8, Allocator.Temp);
         try
         {
-            Vector2 p0v = new Vector2(0f, 0f);
-            Vector2 p1v = new Vector2(1f, 0f);
-            Vector2 p2v = new Vector2(1f, 1f);
-            Vector2 p3v = new Vector2(0f, 1f);
+            float2 p0v = new float2(0f, 0f);
+            float2 p1v = new float2(1f, 0f);
+            float2 p2v = new float2(1f, 1f);
+            float2 p3v = new float2(0f, 1f);
 
             int p0 = detail.AddPoint(new float3(p0v.x, p0v.y, 0f));
             int p1 = detail.AddPoint(new float3(p1v.x, p1v.y, 0f));
@@ -377,13 +428,13 @@ public class SangriaMeshCoreTests
 
                 float trianglesArea = 0f;
                 int[] triangles = mesh.triangles;
-                Vector3[] verts = mesh.vertices;
+                var verts = mesh.vertices;
                 for (int i = 0; i < triangles.Length; i += 3)
                 {
                     trianglesArea += TriangleArea2D(
-                        verts[triangles[i]],
-                        verts[triangles[i + 1]],
-                        verts[triangles[i + 2]]);
+                        new float3(verts[triangles[i]].x, verts[triangles[i]].y, verts[triangles[i]].z),
+                        new float3(verts[triangles[i + 1]].x, verts[triangles[i + 1]].y, verts[triangles[i + 1]].z),
+                        new float3(verts[triangles[i + 2]].x, verts[triangles[i + 2]].y, verts[triangles[i + 2]].z));
                 }
 
                 Assert.AreEqual(polygonArea, trianglesArea, 1e-5f);
@@ -405,11 +456,11 @@ public class SangriaMeshCoreTests
         var detail = new NativeDetail(16, Allocator.Temp);
         try
         {
-            Vector2 p0v = new Vector2(0f, 0f);
-            Vector2 p1v = new Vector2(1f, 0f);
-            Vector2 p2v = new Vector2(1.3f, 0.8f);
-            Vector2 p3v = new Vector2(0.5f, 1.4f);
-            Vector2 p4v = new Vector2(-0.2f, 0.8f);
+            float2 p0v = new float2(0f, 0f);
+            float2 p1v = new float2(1f, 0f);
+            float2 p2v = new float2(1.3f, 0.8f);
+            float2 p3v = new float2(0.5f, 1.4f);
+            float2 p4v = new float2(-0.2f, 0.8f);
 
             int p0 = detail.AddPoint(new float3(p0v.x, p0v.y, 0f));
             int p1 = detail.AddPoint(new float3(p1v.x, p1v.y, 0f));
@@ -438,13 +489,13 @@ public class SangriaMeshCoreTests
 
                 float trianglesArea = 0f;
                 int[] triangles = mesh.triangles;
-                Vector3[] verts = mesh.vertices;
+                var verts = mesh.vertices;
                 for (int i = 0; i < triangles.Length; i += 3)
                 {
                     trianglesArea += TriangleArea2D(
-                        verts[triangles[i]],
-                        verts[triangles[i + 1]],
-                        verts[triangles[i + 2]]);
+                        new float3(verts[triangles[i]].x, verts[triangles[i]].y, verts[triangles[i]].z),
+                        new float3(verts[triangles[i + 1]].x, verts[triangles[i + 1]].y, verts[triangles[i + 1]].z),
+                        new float3(verts[triangles[i + 2]].x, verts[triangles[i + 2]].y, verts[triangles[i + 2]].z));
                 }
 
                 Assert.AreEqual(polygonArea, trianglesArea, 1e-4f);
@@ -467,11 +518,11 @@ public class SangriaMeshCoreTests
         try
         {
             // Concave pentagon in XY plane.
-            Vector2 p0v = new Vector2(0f, 0f);
-            Vector2 p1v = new Vector2(3f, 0f);
-            Vector2 p2v = new Vector2(3f, 3f);
-            Vector2 p3v = new Vector2(1.5f, 1f);
-            Vector2 p4v = new Vector2(0f, 3f);
+            float2 p0v = new float2(0f, 0f);
+            float2 p1v = new float2(3f, 0f);
+            float2 p2v = new float2(3f, 3f);
+            float2 p3v = new float2(1.5f, 1f);
+            float2 p4v = new float2(0f, 3f);
 
             int p0 = detail.AddPoint(new float3(p0v.x, p0v.y, 0f));
             int p1 = detail.AddPoint(new float3(p1v.x, p1v.y, 0f));
@@ -499,13 +550,13 @@ public class SangriaMeshCoreTests
 
                 float trianglesArea = 0f;
                 int[] triangles = mesh.triangles;
-                Vector3[] verts = mesh.vertices;
+                var verts = mesh.vertices;
                 for (int i = 0; i < triangles.Length; i += 3)
                 {
                     trianglesArea += TriangleArea2D(
-                        verts[triangles[i]],
-                        verts[triangles[i + 1]],
-                        verts[triangles[i + 2]]);
+                        new float3(verts[triangles[i]].x, verts[triangles[i]].y, verts[triangles[i]].z),
+                        new float3(verts[triangles[i + 1]].x, verts[triangles[i + 1]].y, verts[triangles[i + 1]].z),
+                        new float3(verts[triangles[i + 2]].x, verts[triangles[i + 2]].y, verts[triangles[i + 2]].z));
                 }
 
                 Assert.AreEqual(polygonArea, trianglesArea, 1e-4f);
@@ -513,6 +564,54 @@ public class SangriaMeshCoreTests
             finally
             {
                 Object.DestroyImmediate(mesh);
+            }
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void SelfIntersectingPolygonFallsBackWithoutIndexOverflow()
+    {
+        var detail = new NativeDetail(16, Allocator.Temp);
+        try
+        {
+            float2[] polygon =
+            {
+                new float2(0.7239871f, 0.23342294f),
+                new float2(2.5099974f, 1.9871782f),
+                new float2(4.149402f, 0.15519628f),
+                new float2(5.1459413f, 0.96049553f),
+                new float2(5.767389f, 1.8099262f)
+            };
+
+            var primitiveVertices = new NativeArray<int>(polygon.Length, Allocator.Temp);
+            try
+            {
+                for (int i = 0; i < polygon.Length; i++)
+                {
+                    int pointIndex = detail.AddPoint(new float3(polygon[i].x, polygon[i].y, 0f));
+                    primitiveVertices[i] = detail.AddVertex(pointIndex);
+                }
+
+                Assert.GreaterOrEqual(detail.AddPrimitive(primitiveVertices), 0);
+
+                var mesh = detail.ToUnityMesh("SelfIntersectingPolygon", Allocator.Temp);
+                try
+                {
+                    Assert.AreEqual((polygon.Length - 2) * 3, mesh.triangles.Length);
+                }
+                finally
+                {
+                    Object.DestroyImmediate(mesh);
+                }
+            }
+            finally
+            {
+                if (primitiveVertices.IsCreated)
+                    primitiveVertices.Dispose();
             }
         }
         finally
@@ -564,6 +663,36 @@ public class SangriaMeshCoreTests
     }
 
     [Test]
+    public void CompiledDetailThrowsAfterDispose()
+    {
+        var detail = new NativeDetail(4, Allocator.Temp);
+        try
+        {
+            int pointIndex = detail.AddPoint(new float3(0f, 0f, 0f));
+            int vertexIndex = detail.AddVertex(pointIndex);
+            using var tri = new NativeArray<int>(new[] { vertexIndex, vertexIndex, vertexIndex }, Allocator.Temp);
+            Assert.GreaterOrEqual(detail.AddPrimitive(tri), 0);
+
+            var compiled = detail.Compile(Allocator.Temp);
+            compiled.Dispose();
+
+            Assert.IsTrue(compiled.IsDisposed);
+            Assert.Throws<System.ObjectDisposedException>(() =>
+            {
+                compiled.TryGetAttributeAccessor<float3>(MeshDomain.Point, AttributeID.Position, out _);
+            });
+            Assert.Throws<System.ObjectDisposedException>(() =>
+            {
+                compiled.TryGetResource<int>(GrowthResourceBase, out _);
+            });
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
     public void SphereGeneratorCreatesExpectedCounts()
     {
         const int lon = 12;
@@ -594,23 +723,24 @@ public class SangriaMeshCoreTests
         }
     }
 
-    private static float PolygonArea2D(Vector2[] polygon)
+    private static float PolygonArea2D(float2[] polygon)
     {
         float area2 = 0f;
         for (int i = 0; i < polygon.Length; i++)
         {
-            Vector2 a = polygon[i];
-            Vector2 b = polygon[(i + 1) % polygon.Length];
+            float2 a = polygon[i];
+            float2 b = polygon[(i + 1) % polygon.Length];
             area2 += a.x * b.y - b.x * a.y;
         }
 
         return Mathf.Abs(area2) * 0.5f;
     }
 
-    private static float TriangleArea2D(Vector3 a, Vector3 b, Vector3 c)
+    private static float TriangleArea2D(float3 a, float3 b, float3 c)
     {
         float2 ab = new float2(b.x - a.x, b.y - a.y);
         float2 ac = new float2(c.x - a.x, c.y - a.y);
         return math.abs(ab.x * ac.y - ab.y * ac.x) * 0.5f;
     }
+
 }

@@ -20,6 +20,8 @@ namespace SangriaMesh
         public int VertexCount;
         public int PrimitiveCount;
         public bool IsTriangleOnlyTopology;
+        public bool IsDisposed => m_IsDisposed;
+        public bool IsCreated => !m_IsDisposed && VertexToPointDense.IsCreated;
 
         internal NativeCompiledDetail(
             NativeArray<int> vertexToPointDense,
@@ -55,6 +57,7 @@ namespace SangriaMesh
             where T : unmanaged
         {
             accessor = default;
+            ThrowIfDisposed();
 
             return domain switch
             {
@@ -67,6 +70,7 @@ namespace SangriaMesh
 
         public CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
         {
+            ThrowIfDisposed();
             return Resources.TryGetResource(resourceId, out value);
         }
 
@@ -88,6 +92,23 @@ namespace SangriaMesh
             Resources.Dispose();
 
             m_IsDisposed = true;
+            VertexToPointDense = default;
+            PrimitiveOffsetsDense = default;
+            PrimitiveVerticesDense = default;
+            PointAttributes = default;
+            VertexAttributes = default;
+            PrimitiveAttributes = default;
+            Resources = default;
+            PointCount = 0;
+            VertexCount = 0;
+            PrimitiveCount = 0;
+            IsTriangleOnlyTopology = false;
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (m_IsDisposed)
+                throw new ObjectDisposedException(nameof(NativeCompiledDetail));
         }
     }
 }

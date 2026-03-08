@@ -13,7 +13,8 @@ namespace SangriaMesh
         private NativeArray<byte> m_Data;
 
         public int Count => m_Descriptors.IsCreated ? m_Descriptors.Length : 0;
-        public bool IsCreated => m_Descriptors.IsCreated;
+        public bool IsCreated => !m_IsDisposed && m_Descriptors.IsCreated;
+        public bool IsDisposed => m_IsDisposed;
 
         public CompiledResourceSet(
             NativeArray<CompiledResourceDescriptor> descriptors,
@@ -29,6 +30,7 @@ namespace SangriaMesh
         public bool TryGetDescriptor(int resourceId, out CompiledResourceDescriptor descriptor)
         {
             descriptor = default;
+            ThrowIfDisposed();
             if (!m_IdToDescriptor.IsCreated)
                 return false;
 
@@ -42,6 +44,7 @@ namespace SangriaMesh
         public CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
         {
             value = default;
+            ThrowIfDisposed();
 
             if (!TryGetDescriptor(resourceId, out var descriptor))
                 return CoreResult.NotFound;
@@ -67,6 +70,15 @@ namespace SangriaMesh
                 m_Data.Dispose();
 
             m_IsDisposed = true;
+            m_Descriptors = default;
+            m_IdToDescriptor = default;
+            m_Data = default;
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (m_IsDisposed)
+                throw new ObjectDisposedException(nameof(CompiledResourceSet));
         }
     }
 }

@@ -292,6 +292,7 @@ namespace SangriaMesh
 
                 primitiveVertices.Clear();
                 primitivePositions.Clear();
+                int primitiveStartWriteIndex = triangleWriteIndex;
 
                 bool hasInvalidPoint = false;
                 for (int i = 0; i < primitiveVertexCount; i++)
@@ -313,12 +314,21 @@ namespace SangriaMesh
 
                 if (hasInvalidPoint || !TryBuildProjectedPolygon(primitivePositions, projectedPolygon))
                 {
-                    triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, triangleWriteIndex);
+                    triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, primitiveStartWriteIndex);
+                    ValidatePrimitiveTriangulationWrite(
+                        primitiveVertexCount,
+                        primitiveStartWriteIndex,
+                        triangleWriteIndex);
                     continue;
                 }
 
                 if (!TryTriangulateEarClip(primitiveVertices, projectedPolygon, polygonOrder, triangles, ref triangleWriteIndex))
-                    triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, triangleWriteIndex);
+                    triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, primitiveStartWriteIndex);
+
+                ValidatePrimitiveTriangulationWrite(
+                    primitiveVertexCount,
+                    primitiveStartWriteIndex,
+                    triangleWriteIndex);
             }
 
             int vertexCount = compiled.VertexCount;
@@ -656,6 +666,20 @@ namespace SangriaMesh
             }
 
             return triangleWriteIndex;
+        }
+
+        private static void ValidatePrimitiveTriangulationWrite(
+            int primitiveVertexCount,
+            int primitiveStartWriteIndex,
+            int primitiveEndWriteIndex)
+        {
+            int expectedIndices = (primitiveVertexCount - 2) * 3;
+            int writtenIndices = primitiveEndWriteIndex - primitiveStartWriteIndex;
+            if (writtenIndices != expectedIndices)
+            {
+                throw new InvalidOperationException(
+                    $"Invalid triangulation write count. Expected {expectedIndices}, wrote {writtenIndices}.");
+            }
         }
 
         private static float ComputeSignedArea2(List<float2> points, List<int> order)
