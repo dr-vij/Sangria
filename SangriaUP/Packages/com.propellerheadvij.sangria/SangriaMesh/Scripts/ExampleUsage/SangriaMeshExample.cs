@@ -39,8 +39,10 @@ public sealed class SangriaMeshExample : MonoBehaviour
 
         NativeCompiledDetail compiled = default;
         long buildTicks = 0;
+        long editTicks = 0;
         long compileTicks = 0;
         long bakeTicks = 0;
+        bool edited = false;
 
         try
         {
@@ -51,6 +53,13 @@ public sealed class SangriaMeshExample : MonoBehaviour
                 m_LongitudeSegments,
                 m_LatitudeSegments);
             buildTicks = m_Stopwatch.ElapsedTicks;
+
+            m_Stopwatch.Restart();
+            if (m_RuntimeDetail.VertexCount > 0 && m_RuntimeDetail.IsVertexAlive(0))
+            {
+                edited = m_RuntimeDetail.RemoveVertex(0, VertexDeletePolicy.RemoveFromIncidentPrimitives);
+            }
+            editTicks = m_Stopwatch.ElapsedTicks;
 
             m_Stopwatch.Restart();
             compiled = m_RuntimeDetail.Compile(Allocator.Temp);
@@ -74,8 +83,10 @@ public sealed class SangriaMeshExample : MonoBehaviour
             Debug.Log(
                 $"[SangriaMeshExample] frame={Time.frameCount} " +
                 $"build={TicksToMilliseconds(buildTicks):F3}ms " +
+                $"edit={TicksToMilliseconds(editTicks):F3}ms " +
                 $"compile={TicksToMilliseconds(compileTicks):F3}ms " +
-                $"bake={TicksToMilliseconds(bakeTicks):F3}ms");
+                $"bake={TicksToMilliseconds(bakeTicks):F3}ms " +
+                $"edited={edited}");
         }
     }
 

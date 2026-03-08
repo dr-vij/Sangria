@@ -27,6 +27,8 @@ namespace SangriaMesh
         public int DataLength => m_Data.Length;
         public int TotalVertexCount => m_TotalLength;
         public bool IsDenseTriangleLayout => m_IsDenseTriangleLayout;
+        public int GarbageLength => m_GarbageLength;
+        public bool HasGarbage => m_GarbageLength > 0;
 
         public PrimitiveStorage(int initialPrimitiveCapacity, int defaultPrimitiveCapacity, Allocator allocator)
         {
@@ -245,7 +247,28 @@ namespace SangriaMesh
             record.Capacity = 0;
             m_Records[primitiveIndex] = record;
             m_IsDenseTriangleLayout = false;
-            TryCompactGarbage();
+        }
+
+        public bool CollectGarbage(float minGarbageRatio = 0f)
+        {
+            if (m_GarbageLength <= 0)
+                return false;
+
+            if (m_Data.Length <= 0)
+            {
+                m_GarbageLength = 0;
+                return false;
+            }
+
+            if (minGarbageRatio > 0f)
+            {
+                float garbageRatio = (float)m_GarbageLength / m_Data.Length;
+                if (garbageRatio < minGarbageRatio)
+                    return false;
+            }
+
+            CompactGarbage();
+            return true;
         }
 
         public void Clear()
@@ -304,22 +327,11 @@ namespace SangriaMesh
             record.Start = newStart;
             record.Capacity = newCap;
             m_Records[primitiveIndex] = record;
-
-            TryCompactGarbage();
         }
 
-        private void TryCompactGarbage()
+        private void CompactGarbage()
         {
             if (m_GarbageLength <= 0)
-                return;
-            if (m_Data.Length <= 0)
-            {
-                m_GarbageLength = 0;
-                return;
-            }
-
-            // Compact when garbage reaches at least half of allocated data.
-            if (m_GarbageLength * 2 < m_Data.Length)
                 return;
 
             int recordCount = m_Records.Length;
