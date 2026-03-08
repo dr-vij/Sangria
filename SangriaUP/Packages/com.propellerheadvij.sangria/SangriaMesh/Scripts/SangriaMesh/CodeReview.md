@@ -151,10 +151,10 @@ The following tests were added to cover the latest fixes:
 
 - `AttributeVersionIncrementsForSchemaAndResourceMutations`
 - `DenseRebuildClearsAllCustomAttributeDomains`
-- `PrimitiveStorageCompactsAfterLargeGarbageAccumulation`
+- `PrimitiveStorageCollectGarbageIsExplicit`
 - `RemovingVertexAfterPrimitiveMutationKeepsAdjacencyConsistent`
 - `RemovingPointWithMultipleVerticesRemovesAllIncidentPrimitives`
-- `RemovingVertexAfterDensePopulateRebuildsAdjacencyCache`
+- `RemovingVertexAfterDensePopulateKeepsTopologyConsistent`
 
 Previously added critical tests are still relevant:
 
@@ -176,4 +176,3 @@ This keeps momentum on functionality while reducing the chance of regressions in
 
 This report is based on static code inspection and the added test set in source.  
 Build/test execution was not run in this review pass.
-
