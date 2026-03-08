@@ -201,6 +201,12 @@ namespace SangriaMesh
             return m_Records[primitiveIndex];
         }
 
+        public PrimitiveRecord* GetRecordPointerUnchecked()
+        {
+            var recordsArray = m_Records.AsArray();
+            return (PrimitiveRecord*)NativeArrayUnsafeUtility.GetUnsafePtr(recordsArray);
+        }
+
         public int GetVertexUnchecked(in PrimitiveRecord record, int vertexOffset)
         {
             return m_Data[record.Start + vertexOffset];
