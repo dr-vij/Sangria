@@ -8,7 +8,7 @@ public class SangriaMeshTopologyEditTests
     [Test]
     public void VertexFailPolicyBlocksRemovalWhenIncidentPrimitivesExist()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
@@ -35,7 +35,7 @@ public class SangriaMeshTopologyEditTests
     [Test]
     public void RemoveFromIncidentPrimitivesKeepsPolygonWhenStillValid()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
@@ -64,7 +64,7 @@ public class SangriaMeshTopologyEditTests
     [Test]
     public void DeleteIncidentPrimitivesPolicyRemovesAllConnectedFaces()
     {
-        var detail = new NativeDetail(16, Allocator.Temp);
+        var detail = new NativeDetail(16, Allocator.TempJob);
         try
         {
             int pShared = detail.AddPoint(new float3(0f, 0f, 0f));
@@ -98,7 +98,7 @@ public class SangriaMeshTopologyEditTests
     [Test]
     public void PointPoliciesRespectIncidentChecks()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             int sharedPoint = detail.AddPoint(new float3(0f, 0f, 0f));

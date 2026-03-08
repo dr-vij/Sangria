@@ -8,7 +8,7 @@ public class SangriaMeshStorageTests
     [Test]
     public void PrimitiveStorageCollectGarbageIsExplicit()
     {
-        var detail = new NativeDetail(16, Allocator.Temp);
+        var detail = new NativeDetail(16, Allocator.TempJob);
         try
         {
             int p0 = detail.AddPoint(new float3(0f, 0f, 0f));

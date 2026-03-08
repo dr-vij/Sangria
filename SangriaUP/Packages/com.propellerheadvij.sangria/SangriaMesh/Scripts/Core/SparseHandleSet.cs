@@ -134,22 +134,26 @@ namespace SangriaMesh
         public void GetAliveIndices(NativeList<int> output)
         {
             int usedCount = m_NextUnusedIndex;
-            if (usedCount <= 0)
+            int aliveCount = m_Count;
+            if (usedCount <= 0 || aliveCount <= 0)
             {
                 output.Clear();
+                return;
+            }
+
+            if (aliveCount == usedCount && m_FreeIndices.Length == 0)
+            {
+                output.Resize(usedCount, NativeArrayOptions.UninitializedMemory);
+                var denseArray = output.AsArray();
+                int* densePtr = (int*)NativeArrayUnsafeUtility.GetUnsafePtr(denseArray);
+                for (int i = 0; i < usedCount; i++)
+                    densePtr[i] = i;
                 return;
             }
 
             var alive = m_Alive.AsReadOnly();
             int fullWordCount = usedCount >> 6;
             int tailBitCount = usedCount & 63;
-            int aliveCount = CountSetBits(alive, fullWordCount, tailBitCount);
-
-            if (aliveCount <= 0)
-            {
-                output.Clear();
-                return;
-            }
 
             output.Resize(aliveCount, NativeArrayOptions.UninitializedMemory);
             var outputArray = output.AsArray();
@@ -268,23 +272,20 @@ namespace SangriaMesh
             UnsafeUtility.MemClear(dst, count * UnsafeUtility.SizeOf<uint>());
         }
 
-        private static int CountSetBits(NativeBitArray.ReadOnly alive, int fullWordCount, int tailBitCount)
-        {
-            int aliveCount = 0;
-            for (int wordIndex = 0; wordIndex < fullWordCount; wordIndex++)
-                aliveCount += math.countbits(alive.GetBits(wordIndex << 6, 64));
-
-            if (tailBitCount > 0)
-            {
-                int baseIndex = fullWordCount << 6;
-                aliveCount += math.countbits(alive.GetBits(baseIndex, tailBitCount));
-            }
-
-            return aliveCount;
-        }
-
         private static void AppendSetBits(int* outputPtr, ref int writeCursor, ulong bits, int baseIndex)
         {
+            if (bits == 0)
+                return;
+
+            // Hot path for dense 64-bit blocks: avoid per-bit tzcnt loop.
+            if (bits == ulong.MaxValue)
+            {
+                for (int i = 0; i < 64; i++)
+                    outputPtr[writeCursor + i] = baseIndex + i;
+                writeCursor += 64;
+                return;
+            }
+
             while (bits != 0)
             {
                 int bitOffset = math.tzcnt(bits);

@@ -31,7 +31,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void CompileDenseTopologyAndAttributes()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
 
         Assert.AreEqual(CoreResult.Success, detail.AddPointAttribute<float>(PointTempAttribute));
         Assert.AreEqual(CoreResult.Success, detail.AddPrimitiveAttribute<int>(PrimitiveMaterialAttribute));
@@ -60,7 +60,7 @@ public class SangriaMeshCoreTests
         var resource = new TestResource { Value = 123.5f, Flags = 9 };
         Assert.AreEqual(CoreResult.Success, detail.SetResource(ResourceId, resource));
 
-        var compiled = detail.Compile(Allocator.Temp);
+        var compiled = detail.Compile(Allocator.TempJob);
 
         Assert.AreEqual(3, compiled.PointCount);
         Assert.AreEqual(3, compiled.VertexCount);
@@ -94,7 +94,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void HandleInvalidationWorks()
     {
-        var detail = new NativeDetail(2, Allocator.Temp);
+        var detail = new NativeDetail(2, Allocator.TempJob);
 
         int p0 = detail.AddPoint(new float3(0f, 0f, 0f), out var oldHandle);
         Assert.IsTrue(detail.IsPointHandleValid(oldHandle));
@@ -113,7 +113,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void StaleAttributeHandleIsRejectedAfterRemoveAndReAdd()
     {
-        var detail = new NativeDetail(4, Allocator.Temp);
+        var detail = new NativeDetail(4, Allocator.TempJob);
         try
         {
             int pointIndex = detail.AddPoint(new float3(0f, 0f, 0f));
@@ -141,7 +141,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void PointHandleStaysInvalidAfterDenseRebuildPath()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             detail.AddPoint(new float3(1f, 2f, 3f), out var oldHandle);
@@ -160,7 +160,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void AttributeVersionIncrementsForSchemaAndResourceMutations()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             uint expectedVersion = detail.AttributeVersion;
@@ -219,7 +219,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void DenseRebuildClearsAllCustomAttributeDomains()
     {
-        var detail = new NativeDetail(16, Allocator.Temp);
+        var detail = new NativeDetail(16, Allocator.TempJob);
         try
         {
             Assert.AreEqual(CoreResult.Success, detail.AddPointAttribute<float>(DenseClearPointAttribute));
@@ -263,7 +263,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void RegisteringManyPointAttributesGrowsInternalMapCapacity()
     {
-        var detail = new NativeDetail(4, Allocator.Temp);
+        var detail = new NativeDetail(4, Allocator.TempJob);
         try
         {
             const int attributeCount = 96;
@@ -290,7 +290,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void RegisteringManyResourcesGrowsInternalMapCapacity()
     {
-        var detail = new NativeDetail(2, Allocator.Temp);
+        var detail = new NativeDetail(2, Allocator.TempJob);
         try
         {
             const int resourceCount = 128;
@@ -312,7 +312,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void LateRegisteredPointAttributeIsZeroInitialized()
     {
-        var detail = new NativeDetail(4, Allocator.Temp);
+        var detail = new NativeDetail(4, Allocator.TempJob);
         try
         {
             int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
@@ -336,7 +336,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void ConvertsTriangleToUnityMesh()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             Assert.AreEqual(CoreResult.Success, detail.AddVertexAttribute<float3>(AttributeID.Normal));
@@ -364,7 +364,7 @@ public class SangriaMeshCoreTests
             using var triangle = new NativeArray<int>(new[] { v0, v1, v2 }, Allocator.Temp);
             Assert.GreaterOrEqual(detail.AddPrimitive(triangle), 0);
 
-            var mesh = detail.ToUnityMesh("TestMesh", Allocator.Temp);
+            var mesh = detail.ToUnityMesh("TestMesh", Allocator.TempJob);
             try
             {
                 Assert.AreEqual("TestMesh", mesh.name);
@@ -395,7 +395,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void QuadPrimitiveIsTriangulatedOnUnityMeshConversion()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             float2 p0v = new float2(0f, 0f);
@@ -416,7 +416,7 @@ public class SangriaMeshCoreTests
             using var quad = new NativeArray<int>(new[] { v0, v1, v2, v3 }, Allocator.Temp);
             Assert.GreaterOrEqual(detail.AddPrimitive(quad), 0);
 
-            var mesh = detail.ToUnityMesh("QuadMesh", Allocator.Temp);
+            var mesh = detail.ToUnityMesh("QuadMesh", Allocator.TempJob);
             try
             {
                 Assert.AreEqual("QuadMesh", mesh.name);
@@ -453,7 +453,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void PentagonPrimitiveIsTriangulatedOnUnityMeshConversion()
     {
-        var detail = new NativeDetail(16, Allocator.Temp);
+        var detail = new NativeDetail(16, Allocator.TempJob);
         try
         {
             float2 p0v = new float2(0f, 0f);
@@ -477,7 +477,7 @@ public class SangriaMeshCoreTests
             using var pentagon = new NativeArray<int>(new[] { v0, v1, v2, v3, v4 }, Allocator.Temp);
             Assert.GreaterOrEqual(detail.AddPrimitive(pentagon), 0);
 
-            var mesh = detail.ToUnityMesh("PentagonMesh", Allocator.Temp);
+            var mesh = detail.ToUnityMesh("PentagonMesh", Allocator.TempJob);
             try
             {
                 Assert.AreEqual("PentagonMesh", mesh.name);
@@ -514,7 +514,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void ConcavePolygonTriangulationPreservesPolygonArea()
     {
-        var detail = new NativeDetail(16, Allocator.Temp);
+        var detail = new NativeDetail(16, Allocator.TempJob);
         try
         {
             // Concave pentagon in XY plane.
@@ -539,7 +539,7 @@ public class SangriaMeshCoreTests
             using var concave = new NativeArray<int>(new[] { v0, v1, v2, v3, v4 }, Allocator.Temp);
             Assert.GreaterOrEqual(detail.AddPrimitive(concave), 0);
 
-            var mesh = detail.ToUnityMesh("ConcaveMesh", Allocator.Temp);
+            var mesh = detail.ToUnityMesh("ConcaveMesh", Allocator.TempJob);
             try
             {
                 Assert.AreEqual(5, mesh.vertexCount);
@@ -575,7 +575,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void SelfIntersectingPolygonFallsBackWithoutIndexOverflow()
     {
-        var detail = new NativeDetail(16, Allocator.Temp);
+        var detail = new NativeDetail(16, Allocator.TempJob);
         try
         {
             float2[] polygon =
@@ -598,7 +598,7 @@ public class SangriaMeshCoreTests
 
                 Assert.GreaterOrEqual(detail.AddPrimitive(primitiveVertices), 0);
 
-                var mesh = detail.ToUnityMesh("SelfIntersectingPolygon", Allocator.Temp);
+                var mesh = detail.ToUnityMesh("SelfIntersectingPolygon", Allocator.TempJob);
                 try
                 {
                     Assert.AreEqual((polygon.Length - 2) * 3, mesh.triangles.Length);
@@ -623,7 +623,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void CompileSparseTopologyAfterDeletionProducesDenseResult()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
@@ -640,7 +640,7 @@ public class SangriaMeshCoreTests
             using var tri = new NativeArray<int>(new[] { v0, v1, v2 }, Allocator.Temp);
             Assert.GreaterOrEqual(detail.AddPrimitive(tri), 0);
 
-            var compiled = detail.Compile(Allocator.Temp);
+            var compiled = detail.Compile(Allocator.TempJob);
             try
             {
                 Assert.AreEqual(3, compiled.PointCount);
@@ -665,7 +665,7 @@ public class SangriaMeshCoreTests
     [Test]
     public void CompiledDetailThrowsAfterDispose()
     {
-        var detail = new NativeDetail(4, Allocator.Temp);
+        var detail = new NativeDetail(4, Allocator.TempJob);
         try
         {
             int pointIndex = detail.AddPoint(new float3(0f, 0f, 0f));
@@ -673,7 +673,7 @@ public class SangriaMeshCoreTests
             using var tri = new NativeArray<int>(new[] { vertexIndex, vertexIndex, vertexIndex }, Allocator.Temp);
             Assert.GreaterOrEqual(detail.AddPrimitive(tri), 0);
 
-            var compiled = detail.Compile(Allocator.Temp);
+            var compiled = detail.Compile(Allocator.TempJob);
             compiled.Dispose();
 
             Assert.IsTrue(compiled.IsDisposed);
@@ -698,10 +698,10 @@ public class SangriaMeshCoreTests
         const int lon = 12;
         const int lat = 8;
 
-        var detail = SangriaMeshSphereGenerator.CreateUvSphere(0.5f, lon, lat, Allocator.Temp);
+        var detail = SangriaMeshSphereGenerator.CreateUvSphere(0.5f, lon, lat, Allocator.TempJob);
         try
         {
-            var compiled = detail.Compile(Allocator.Temp);
+            var compiled = detail.Compile(Allocator.TempJob);
             try
             {
                 int expectedPoints = 2 + (lat - 1) * lon;

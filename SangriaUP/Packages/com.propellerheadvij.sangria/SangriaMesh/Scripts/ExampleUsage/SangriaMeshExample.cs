@@ -13,6 +13,12 @@ public sealed class SangriaMeshExample : MonoBehaviour
     [SerializeField] private MeshFilter m_TargetMeshFilter;
     [SerializeField] private bool m_LogTimings = true;
     [SerializeField, Min(1)] private int m_LogEveryNFrames = 1;
+    [Header("Realtime Edit Stress")]
+    [SerializeField] private bool m_RemoveVertexZero = true;
+    [SerializeField] private VertexDeletePolicy m_VertexDeletePolicy = VertexDeletePolicy.RemoveFromIncidentPrimitives;
+    [SerializeField] private bool m_RemovePrimitiveLoop = true;
+    [SerializeField, Range(0f, 1f)] private float m_PrimitiveLoopLatitude01 = 0.5f;
+    [SerializeField, Min(1)] private int m_PrimitiveLoopStep = 1;
     [Header("Gizmo Preview")]
     [SerializeField] private bool m_DrawPreview = true;
     [SerializeField] private bool m_DrawPoints = true;
@@ -42,7 +48,8 @@ public sealed class SangriaMeshExample : MonoBehaviour
         long editTicks = 0;
         long compileTicks = 0;
         long bakeTicks = 0;
-        bool edited = false;
+        bool removedVertex = false;
+        int removedLoopPrimitives = 0;
 
         try
         {
@@ -55,14 +62,20 @@ public sealed class SangriaMeshExample : MonoBehaviour
             buildTicks = m_Stopwatch.ElapsedTicks;
 
             m_Stopwatch.Restart();
-            if (m_RuntimeDetail.VertexCount > 0 && m_RuntimeDetail.IsVertexAlive(0))
+            if (m_RemoveVertexZero &&
+                m_RuntimeDetail.VertexCount > 0 &&
+                m_RuntimeDetail.IsVertexAlive(0))
             {
-                edited = m_RuntimeDetail.RemoveVertex(0, VertexDeletePolicy.RemoveFromIncidentPrimitives);
+                removedVertex = m_RuntimeDetail.RemoveVertex(0, m_VertexDeletePolicy);
             }
+
+            if (m_RemovePrimitiveLoop)
+                removedLoopPrimitives = RemovePrimitiveLoopBand(ref m_RuntimeDetail);
+
             editTicks = m_Stopwatch.ElapsedTicks;
 
             m_Stopwatch.Restart();
-            compiled = m_RuntimeDetail.Compile(Allocator.Temp);
+            compiled = m_RuntimeDetail.Compile(Allocator.TempJob);
             compileTicks = m_Stopwatch.ElapsedTicks;
 
             m_Stopwatch.Restart();
@@ -86,7 +99,8 @@ public sealed class SangriaMeshExample : MonoBehaviour
                 $"edit={TicksToMilliseconds(editTicks):F3}ms " +
                 $"compile={TicksToMilliseconds(compileTicks):F3}ms " +
                 $"bake={TicksToMilliseconds(bakeTicks):F3}ms " +
-                $"edited={edited}");
+                $"removedVertex={removedVertex} " +
+                $"removedLoopPrimitives={removedLoopPrimitives}");
         }
     }
 
@@ -106,11 +120,11 @@ public sealed class SangriaMeshExample : MonoBehaviour
     private void BuildSphereExample()
     {
         NativeDetail detail;
-        CreateSphereWithPrecomputedNormalsAndUv(out detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.Temp);
+        CreateSphereWithPrecomputedNormalsAndUv(out detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.TempJob);
 
         try
         {
-            NativeCompiledDetail compiled = detail.Compile(Allocator.Temp);
+            NativeCompiledDetail compiled = detail.Compile(Allocator.TempJob);
             try
             {
                 Debug.Log($"SangriaMesh sphere created: points={compiled.PointCount}, vertices={compiled.VertexCount}, primitives={compiled.PrimitiveCount}");
@@ -142,7 +156,7 @@ public sealed class SangriaMeshExample : MonoBehaviour
                 return;
             }
 
-            CreateSphereWithPrecomputedNormalsAndUv(out var detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.Temp);
+            CreateSphereWithPrecomputedNormalsAndUv(out var detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.TempJob);
 
             try
             {
@@ -174,12 +188,12 @@ public sealed class SangriaMeshExample : MonoBehaviour
     [ContextMenu("Build SangriaMesh Sphere And Convert To Unity Mesh")]
     private void BuildSphereAndConvertToUnityMesh()
     {
-        CreateSphereWithPrecomputedNormalsAndUv(out var detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.Temp);
+        CreateSphereWithPrecomputedNormalsAndUv(out var detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.TempJob);
 
         Mesh unityMesh = null;
         try
         {
-            var compiled = detail.Compile(Allocator.Temp);
+            var compiled = detail.Compile(Allocator.TempJob);
             try
             {
                 unityMesh = compiled.ToUnityMeshTriangles("SangriaMeshSphere");
@@ -208,7 +222,7 @@ public sealed class SangriaMeshExample : MonoBehaviour
         float radius,
         int longitudeSegments,
         int latitudeSegments,
-        Allocator allocator = Allocator.Temp)
+        Allocator allocator = Allocator.TempJob)
     {
         SangriaMeshSphereGenerator.CreateUvSphere(
             out detail,
@@ -276,5 +290,32 @@ public sealed class SangriaMeshExample : MonoBehaviour
     private static double TicksToMilliseconds(long ticks)
     {
         return ticks * 1000.0 / Stopwatch.Frequency;
+    }
+
+    private int RemovePrimitiveLoopBand(ref NativeDetail detail)
+    {
+        int ringCount = m_LatitudeSegments - 1;
+        int bandCount = ringCount - 1;
+        if (m_LongitudeSegments < 3 || bandCount <= 0)
+            return 0;
+
+        int clampedStep = Mathf.Max(1, m_PrimitiveLoopStep);
+        int bandIndex = Mathf.Clamp(Mathf.RoundToInt(m_PrimitiveLoopLatitude01 * (bandCount - 1)), 0, bandCount - 1);
+        int bandStart = m_LongitudeSegments + bandIndex * m_LongitudeSegments * 2;
+
+        int removedCount = 0;
+        for (int lon = 0; lon < m_LongitudeSegments; lon += clampedStep)
+        {
+            int primitiveA = bandStart + lon * 2;
+            int primitiveB = primitiveA + 1;
+
+            if (detail.IsPrimitiveAlive(primitiveA) && detail.RemovePrimitive(primitiveA))
+                removedCount++;
+
+            if (detail.IsPrimitiveAlive(primitiveB) && detail.RemovePrimitive(primitiveB))
+                removedCount++;
+        }
+
+        return removedCount;
     }
 }

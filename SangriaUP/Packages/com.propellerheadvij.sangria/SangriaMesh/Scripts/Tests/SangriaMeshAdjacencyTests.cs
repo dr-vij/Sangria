@@ -8,7 +8,7 @@ public class SangriaMeshAdjacencyTests
     [Test]
     public void RemovingPointWithMultipleIncidentVerticesInSamePolygonKeepsAdjacencyConsistent()
     {
-        var detail = new NativeDetail(16, Allocator.Temp);
+        var detail = new NativeDetail(16, Allocator.TempJob);
         try
         {
             int sharedPoint = detail.AddPoint(new float3(0f, 0f, 0f));
@@ -42,7 +42,7 @@ public class SangriaMeshAdjacencyTests
     [Test]
     public void RemovingVertexAfterPrimitiveMutationKeepsAdjacencyConsistent()
     {
-        var detail = new NativeDetail(16, Allocator.Temp);
+        var detail = new NativeDetail(16, Allocator.TempJob);
         try
         {
             int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
@@ -78,7 +78,7 @@ public class SangriaMeshAdjacencyTests
     [Test]
     public void RemovingPointWithMultipleVerticesRemovesAllIncidentPrimitives()
     {
-        var detail = new NativeDetail(16, Allocator.Temp);
+        var detail = new NativeDetail(16, Allocator.TempJob);
         try
         {
             int sharedPoint = detail.AddPoint(new float3(0f, 0f, 0f));
@@ -116,7 +116,7 @@ public class SangriaMeshAdjacencyTests
     [Test]
     public void RemovingVertexAfterDensePopulateKeepsTopologyConsistent()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             SangriaMeshSphereGenerator.PopulateUvSphere(ref detail, 0.5f, 8, 6);
@@ -126,7 +126,7 @@ public class SangriaMeshAdjacencyTests
             Assert.IsTrue(detail.RemoveVertex(0));
             Assert.AreEqual(initialVertexCount - 1, detail.VertexCount);
 
-            var compiled = detail.Compile(Allocator.Temp);
+            var compiled = detail.Compile(Allocator.TempJob);
             try
             {
                 Assert.AreEqual(detail.VertexCount, compiled.VertexCount);
@@ -145,7 +145,7 @@ public class SangriaMeshAdjacencyTests
     [Test]
     public void DeletePoliciesWorkOnDirtyAdjacencyCache()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             SangriaMeshSphereGenerator.PopulateUvSphere(ref detail, 0.5f, 12, 8);
@@ -166,7 +166,7 @@ public class SangriaMeshAdjacencyTests
     [Test]
     public void RemovePointWithPoliciesWorksWhenAdjacencyIsDirty()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             SangriaMeshSphereGenerator.PopulateUvSphere(ref detail, 0.5f, 12, 8);
@@ -184,7 +184,7 @@ public class SangriaMeshAdjacencyTests
     [Test]
     public void RemovingSingleDuplicateReferenceKeepsIncidentTrackingCorrect()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             int p0 = detail.AddPoint(new float3(0f, 0f, 0f));

@@ -5,7 +5,7 @@ using Unity.Mathematics;
 
 namespace SangriaMesh
 {
-    public unsafe partial struct NativeDetail : IDisposable
+    public partial struct NativeDetail : IDisposable
     {
         #region Point
 
@@ -221,7 +221,7 @@ namespace SangriaMesh
             return vertexIndex;
         }
 
-        internal int* GetVertexToPointPointerUnchecked()
+        internal unsafe int* GetVertexToPointPointerUnchecked()
         {
             var vertexToPointArray = m_VertexToPoint.AsArray();
             return (int*)NativeArrayUnsafeUtility.GetUnsafePtr(vertexToPointArray);

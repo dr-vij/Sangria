@@ -3,7 +3,7 @@ using Unity.Collections;
 
 namespace SangriaMesh
 {
-    public unsafe partial struct NativeDetail : IDisposable
+    public partial struct NativeDetail : IDisposable
     {
         #region Primitive
 
@@ -60,7 +60,7 @@ namespace SangriaMesh
             return primitiveIndex;
         }
 
-        internal int* GetPrimitiveTriangleDataPointerUnchecked()
+        internal unsafe int* GetPrimitiveTriangleDataPointerUnchecked()
         {
             return m_PrimitiveStorage.GetDataPointerUnchecked();
         }

@@ -47,7 +47,7 @@ namespace SangriaMesh
         /// Converts editable SangriaMesh detail to Unity Mesh.
         /// Supports polygon primitives and triangulates them with ear clipping (fan fallback).
         /// </summary>
-        public static void FillUnityMesh(this NativeDetail detail, Mesh mesh, Allocator allocator = Allocator.Temp)
+        public static void FillUnityMesh(this NativeDetail detail, Mesh mesh, Allocator allocator = Allocator.TempJob)
         {
             NativeCompiledDetail compiled = detail.Compile(allocator);
             try
@@ -476,7 +476,7 @@ namespace SangriaMesh
         /// <summary>
         /// Creates a new Unity Mesh from editable SangriaMesh detail.
         /// </summary>
-        public static Mesh ToUnityMesh(this NativeDetail detail, string meshName = "SangriaMesh", Allocator allocator = Allocator.Temp)
+        public static Mesh ToUnityMesh(this NativeDetail detail, string meshName = "SangriaMesh", Allocator allocator = Allocator.TempJob)
         {
             var mesh = new Mesh { name = meshName };
             try

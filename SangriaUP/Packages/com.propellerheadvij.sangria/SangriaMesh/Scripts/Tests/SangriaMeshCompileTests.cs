@@ -11,13 +11,80 @@ public class SangriaMeshCompileTests
     [Test]
     public void CompileSparseAfterDirtyVertexRemovalProducesValidTopologyIndices()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             SangriaMeshSphereGenerator.PopulateUvSphere(ref detail, 0.5f, 24, 16);
             Assert.IsTrue(detail.RemoveVertex(0, VertexDeletePolicy.RemoveFromIncidentPrimitives));
 
-            var compiled = detail.Compile(Allocator.Temp);
+            var compiled = detail.Compile(Allocator.TempJob);
+            try
+            {
+                Assert.AreEqual(detail.PointCount, compiled.PointCount);
+                Assert.AreEqual(detail.VertexCount, compiled.VertexCount);
+                Assert.AreEqual(detail.PrimitiveCount, compiled.PrimitiveCount);
+
+                for (int i = 0; i < compiled.VertexToPointDense.Length; i++)
+                {
+                    int densePoint = compiled.VertexToPointDense[i];
+                    Assert.GreaterOrEqual(densePoint, 0);
+                    Assert.Less(densePoint, compiled.PointCount);
+                }
+
+                for (int i = 0; i < compiled.PrimitiveVerticesDense.Length; i++)
+                {
+                    int denseVertex = compiled.PrimitiveVerticesDense[i];
+                    Assert.GreaterOrEqual(denseVertex, 0);
+                    Assert.Less(denseVertex, compiled.VertexCount);
+                }
+
+                for (int i = 0; i < compiled.PrimitiveCount; i++)
+                {
+                    int length = compiled.PrimitiveOffsetsDense[i + 1] - compiled.PrimitiveOffsetsDense[i];
+                    Assert.GreaterOrEqual(length, 3);
+                }
+            }
+            finally
+            {
+                compiled.Dispose();
+            }
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void CompileSparseAfterRemovingPrimitiveLoopBandProducesValidTopologyIndices()
+    {
+        var detail = new NativeDetail(8, Allocator.TempJob);
+        try
+        {
+            const int longitudeSegments = 24;
+            const int latitudeSegments = 16;
+            SangriaMeshSphereGenerator.PopulateUvSphere(ref detail, 0.5f, longitudeSegments, latitudeSegments);
+
+            int ringCount = latitudeSegments - 1;
+            int bandCount = ringCount - 1;
+            int midBandIndex = bandCount / 2;
+            int bandStart = longitudeSegments + midBandIndex * longitudeSegments * 2;
+
+            int removed = 0;
+            for (int lon = 0; lon < longitudeSegments; lon++)
+            {
+                int primitiveA = bandStart + lon * 2;
+                int primitiveB = primitiveA + 1;
+
+                if (detail.RemovePrimitive(primitiveA))
+                    removed++;
+                if (detail.RemovePrimitive(primitiveB))
+                    removed++;
+            }
+
+            Assert.AreEqual(longitudeSegments * 2, removed);
+
+            var compiled = detail.Compile(Allocator.TempJob);
             try
             {
                 Assert.AreEqual(detail.PointCount, compiled.PointCount);
@@ -58,7 +125,7 @@ public class SangriaMeshCompileTests
     [Test]
     public void CompileSparseRemapsPointIndicesAfterPointRemoval()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
@@ -80,7 +147,7 @@ public class SangriaMeshCompileTests
                 PointDeletePolicy.DeleteIncidentVertices,
                 VertexDeletePolicy.RemoveFromIncidentPrimitives));
 
-            var compiled = detail.Compile(Allocator.Temp);
+            var compiled = detail.Compile(Allocator.TempJob);
             try
             {
                 Assert.AreEqual(3, compiled.PointCount);
@@ -115,7 +182,7 @@ public class SangriaMeshCompileTests
     [Test]
     public void CompileSparseRemapsVertexAndPrimitiveAttributesAfterTopologyHoles()
     {
-        var detail = new NativeDetail(8, Allocator.Temp);
+        var detail = new NativeDetail(8, Allocator.TempJob);
         try
         {
             Assert.AreEqual(CoreResult.Success, detail.AddVertexAttribute<float>(VertexWeightAttribute));
@@ -158,7 +225,7 @@ public class SangriaMeshCompileTests
 
             Assert.IsTrue(detail.RemoveVertex(v1, VertexDeletePolicy.DeleteIncidentPrimitives));
 
-            var compiled = detail.Compile(Allocator.Temp);
+            var compiled = detail.Compile(Allocator.TempJob);
             try
             {
                 Assert.AreEqual(4, compiled.VertexCount);
@@ -189,7 +256,7 @@ public class SangriaMeshCompileTests
     [Test]
     public void CompileSparseHandlesLargeHolePatternAcrossBitWordBoundaries()
     {
-        var detail = new NativeDetail(320, Allocator.Temp);
+        var detail = new NativeDetail(320, Allocator.TempJob);
         var pointIndices = new NativeArray<int>(260, Allocator.Temp);
 
         try
@@ -220,7 +287,7 @@ public class SangriaMeshCompileTests
                     VertexDeletePolicy.RemoveFromIncidentPrimitives));
             }
 
-            var compiled = detail.Compile(Allocator.Temp);
+            var compiled = detail.Compile(Allocator.TempJob);
             try
             {
                 Assert.AreEqual(detail.PointCount, compiled.PointCount);

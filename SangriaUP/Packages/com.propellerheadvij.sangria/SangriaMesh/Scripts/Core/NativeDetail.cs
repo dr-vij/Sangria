@@ -1,13 +1,12 @@
 using System;
 using Unity.Burst;
 using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
 
 namespace SangriaMesh
 {
     [BurstCompile]
-    public unsafe partial struct NativeDetail : IDisposable
+    public partial struct NativeDetail : IDisposable
     {
         private readonly Allocator m_Allocator;
         private bool m_IsDisposed;
@@ -54,6 +53,8 @@ namespace SangriaMesh
 
         public NativeDetail(int pointCapacity, int vertexCapacity, int primitiveCapacity, Allocator allocator)
         {
+            EnsureJobSafeAllocator(allocator);
+
             int pointCap = math_max(1, pointCapacity);
             int vertexCap = math_max(1, vertexCapacity);
             int primitiveCap = math_max(1, primitiveCapacity);
@@ -86,6 +87,12 @@ namespace SangriaMesh
             m_PointAttributes.RegisterAttribute<float3>(AttributeID.Position);
             if (m_PointAttributes.TryResolveHandle<float3>(AttributeID.Position, out m_PointPositionHandle) != CoreResult.Success)
                 throw new InvalidOperationException("Failed to initialize mandatory point position handle.");
+        }
+
+        private static void EnsureJobSafeAllocator(Allocator allocator)
+        {
+            if (allocator == Allocator.Temp)
+                throw new InvalidOperationException("Allocator.Temp is not supported for job-scheduled SangriaMesh core. Use Allocator.TempJob or Allocator.Persistent.");
         }
     }
 }

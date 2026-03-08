@@ -121,6 +121,11 @@ namespace SangriaMesh
             return (int*)NativeArrayUnsafeUtility.GetUnsafePtr(dataArray);
         }
 
+        public NativeArray<int> GetDataArray()
+        {
+            return m_Data.AsArray();
+        }
+
         public bool AppendVertex(int primitiveIndex, int vertexIndex)
         {
             EnsureRecordSlot(primitiveIndex);
@@ -159,6 +164,42 @@ namespace SangriaMesh
             m_TotalLength--;
             m_IsDenseTriangleLayout = false;
             return true;
+        }
+
+        public int RemoveAllVertexOccurrences(int primitiveIndex, int vertexIndex)
+        {
+            if ((uint)primitiveIndex >= (uint)m_Records.Length)
+                return 0;
+
+            var record = m_Records[primitiveIndex];
+            if (record.Start < 0 || record.Length <= 0)
+                return 0;
+
+            int start = record.Start;
+            int length = record.Length;
+            int writeCursor = 0;
+
+            for (int readCursor = 0; readCursor < length; readCursor++)
+            {
+                int value = m_Data[start + readCursor];
+                if (value == vertexIndex)
+                    continue;
+
+                if (writeCursor != readCursor)
+                    m_Data[start + writeCursor] = value;
+
+                writeCursor++;
+            }
+
+            int removedCount = length - writeCursor;
+            if (removedCount <= 0)
+                return 0;
+
+            record.Length = writeCursor;
+            m_Records[primitiveIndex] = record;
+            m_TotalLength -= removedCount;
+            m_IsDenseTriangleLayout = false;
+            return removedCount;
         }
 
         public int GetLength(int primitiveIndex)
@@ -205,6 +246,11 @@ namespace SangriaMesh
         {
             var recordsArray = m_Records.AsArray();
             return (PrimitiveRecord*)NativeArrayUnsafeUtility.GetUnsafePtr(recordsArray);
+        }
+
+        public NativeArray<PrimitiveRecord> GetRecordsArray()
+        {
+            return m_Records.AsArray();
         }
 
         public int GetVertexUnchecked(in PrimitiveRecord record, int vertexOffset)

@@ -2,7 +2,7 @@ using System;
 
 namespace SangriaMesh
 {
-    public unsafe partial struct NativeDetail : IDisposable
+    public partial struct NativeDetail : IDisposable
     {
         #region Attributes
 

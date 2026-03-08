@@ -1,6 +1,7 @@
 using System;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Jobs;
 
 namespace SangriaMesh
 {
@@ -315,18 +316,8 @@ namespace SangriaMesh
 
         private void RemoveVertexFromPrimitiveAllOccurrencesWhenAdjacencyDirty(int primitiveIndex, int vertexIndex)
         {
-            PrimitiveRecord record = m_PrimitiveStorage.GetRecordUnchecked(primitiveIndex);
-            bool removedAny = false;
-            for (int k = record.Length - 1; k >= 0; k--)
-            {
-                if (m_PrimitiveStorage.GetVertexUnchecked(record, k) != vertexIndex)
-                    continue;
-
-                m_PrimitiveStorage.RemoveVertexAt(primitiveIndex, k);
-                removedAny = true;
-            }
-
-            if (!removedAny)
+            int removedCount = m_PrimitiveStorage.RemoveAllVertexOccurrences(primitiveIndex, vertexIndex);
+            if (removedCount <= 0)
                 return;
 
             if (m_PrimitiveStorage.GetLength(primitiveIndex) < 3)
@@ -438,70 +429,76 @@ namespace SangriaMesh
             EnsureMultiMapCapacity(ref m_PointToVertices, m_Vertices.Count);
             EnsureMultiMapCapacity(ref m_VertexToPrimitives, m_PrimitiveStorage.TotalVertexCount);
 
+            var vertexToPoint = m_VertexToPoint.AsArray();
+            var primitiveRecords = m_PrimitiveStorage.GetRecordsArray();
+            var primitiveData = m_PrimitiveStorage.GetDataArray();
+
             if (m_Points.IsDenseContiguous && m_Vertices.IsDenseContiguous && m_Primitives.IsDenseContiguous)
             {
-                int pointCount = m_Points.Count;
-                int vertexCount = m_Vertices.Count;
-                for (int vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
+                var denseJob = new BuildAdjacencyDenseJob
                 {
-                    int pointIndex = m_VertexToPoint[vertexIndex];
-                    if ((uint)pointIndex < (uint)pointCount)
-                        m_PointToVertices.Add(pointIndex, vertexIndex);
-                }
-
-                int primitiveCount = m_Primitives.Count;
-                if (m_PrimitiveStorage.IsDenseTriangleLayout)
-                {
-                    int* primitiveData = m_PrimitiveStorage.GetDataPointerUnchecked();
-                    for (int primitiveIndex = 0; primitiveIndex < primitiveCount; primitiveIndex++)
-                    {
-                        int triStart = primitiveIndex * 3;
-                        m_VertexToPrimitives.Add(primitiveData[triStart], primitiveIndex);
-                        m_VertexToPrimitives.Add(primitiveData[triStart + 1], primitiveIndex);
-                        m_VertexToPrimitives.Add(primitiveData[triStart + 2], primitiveIndex);
-                    }
-                }
-                else
-                {
-                    for (int primitiveIndex = 0; primitiveIndex < primitiveCount; primitiveIndex++)
-                    {
-                        PrimitiveRecord record = m_PrimitiveStorage.GetRecordUnchecked(primitiveIndex);
-                        for (int k = 0; k < record.Length; k++)
-                            m_VertexToPrimitives.Add(m_PrimitiveStorage.GetVertexUnchecked(record, k), primitiveIndex);
-                    }
-                }
+                    VertexToPoint = vertexToPoint,
+                    PrimitiveRecords = primitiveRecords,
+                    PrimitiveData = primitiveData,
+                    PointCount = m_Points.Count,
+                    VertexCount = m_Vertices.Count,
+                    PrimitiveCount = m_Primitives.Count,
+                    DenseTriangleLayout = m_PrimitiveStorage.IsDenseTriangleLayout,
+                    PointToVertices = m_PointToVertices,
+                    VertexToPrimitives = m_VertexToPrimitives
+                };
+                denseJob.Schedule().Complete();
 
                 m_AdjacencyDirty = false;
                 return;
             }
 
-            using var aliveVertices = new NativeList<int>(Allocator.Temp);
+            using var aliveVertices = new NativeList<int>(Allocator.TempJob);
+            using var alivePoints = new NativeList<int>(Allocator.TempJob);
+            using var alivePrimitives = new NativeList<int>(Allocator.TempJob);
+
             m_Vertices.GetAliveIndices(aliveVertices);
-            for (int i = 0; i < aliveVertices.Length; i++)
-            {
-                int vertexIndex = aliveVertices[i];
-                int pointIndex = m_VertexToPoint[vertexIndex];
-                if (!m_Points.IsAlive(pointIndex))
-                    continue;
-
-                m_PointToVertices.Add(pointIndex, vertexIndex);
-            }
-
-            using var alivePrimitives = new NativeList<int>(Allocator.Temp);
+            m_Points.GetAliveIndices(alivePoints);
             m_Primitives.GetAliveIndices(alivePrimitives);
-            for (int i = 0; i < alivePrimitives.Length; i++)
-            {
-                int primitiveIndex = alivePrimitives[i];
-                PrimitiveRecord record = m_PrimitiveStorage.GetRecordUnchecked(primitiveIndex);
-                for (int k = 0; k < record.Length; k++)
-                {
-                    int vertexIndex = m_PrimitiveStorage.GetVertexUnchecked(record, k);
-                    if (!m_Vertices.IsAlive(vertexIndex))
-                        continue;
 
-                    m_VertexToPrimitives.Add(vertexIndex, primitiveIndex);
-                }
+            int pointMaskLength = math_max(1, m_Points.MaxIndexExclusive);
+            int vertexMaskLength = math_max(1, m_Vertices.MaxIndexExclusive);
+            using var pointAliveMask = new NativeArray<byte>(pointMaskLength, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+            using var vertexAliveMask = new NativeArray<byte>(vertexMaskLength, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+
+            if (alivePoints.Length > 0)
+            {
+                var pointMaskJob = new BuildAliveMaskJob
+                {
+                    AliveIndices = alivePoints.AsArray(),
+                    AliveMask = pointAliveMask
+                };
+                pointMaskJob.Schedule(alivePoints.Length, 64).Complete();
             }
+
+            if (aliveVertices.Length > 0)
+            {
+                var vertexMaskJob = new BuildAliveMaskJob
+                {
+                    AliveIndices = aliveVertices.AsArray(),
+                    AliveMask = vertexAliveMask
+                };
+                vertexMaskJob.Schedule(aliveVertices.Length, 64).Complete();
+            }
+
+            var sparseJob = new BuildAdjacencySparseJob
+            {
+                AliveVertices = aliveVertices.AsArray(),
+                AlivePrimitives = alivePrimitives.AsArray(),
+                VertexToPoint = vertexToPoint,
+                PointAliveMask = pointAliveMask,
+                VertexAliveMask = vertexAliveMask,
+                PrimitiveRecords = primitiveRecords,
+                PrimitiveData = primitiveData,
+                PointToVertices = m_PointToVertices,
+                VertexToPrimitives = m_VertexToPrimitives
+            };
+            sparseJob.Schedule().Complete();
 
             m_AdjacencyDirty = false;
         }
@@ -511,18 +508,8 @@ namespace SangriaMesh
             if (!adjacencyPrepared)
                 EnsureAdjacencyUpToDate();
 
-            PrimitiveRecord record = m_PrimitiveStorage.GetRecordUnchecked(primitiveIndex);
-            bool removedAny = false;
-            for (int k = record.Length - 1; k >= 0; k--)
-            {
-                if (m_PrimitiveStorage.GetVertexUnchecked(record, k) != vertexIndex)
-                    continue;
-
-                m_PrimitiveStorage.RemoveVertexAt(primitiveIndex, k);
-                removedAny = true;
-            }
-
-            if (!removedAny)
+            int removedCount = m_PrimitiveStorage.RemoveAllVertexOccurrences(primitiveIndex, vertexIndex);
+            if (removedCount <= 0)
                 return;
 
             RemoveValueFromMultiMap(ref m_VertexToPrimitives, vertexIndex, primitiveIndex, removeAllMatches: true);
@@ -603,49 +590,39 @@ namespace SangriaMesh
 
             var descriptors = new NativeArray<CompiledAttributeDescriptor>(attributeCount, allocator);
             var idToDescriptor = new NativeParallelHashMap<int, int>(math_max(1, attributeCount), allocator);
-
-            int totalBytes = 0;
-            for (int i = 0; i < attributeCount; i++)
+            var plans = BuildAttributePackPlans(source, elementCount, ref idToDescriptor, Allocator.TempJob, out int totalBytes);
+            NativeArray<byte> data = default;
+            try
             {
-                var column = source.GetColumnAt(i);
-                totalBytes += column.Stride * elementCount;
-            }
+                data = new NativeArray<byte>(math_max(1, totalBytes), allocator, NativeArrayOptions.UninitializedMemory);
+                byte* basePtr = (byte*)NativeArrayUnsafeUtility.GetUnsafePtr(data);
 
-            var data = new NativeArray<byte>(math_max(1, totalBytes), allocator, NativeArrayOptions.UninitializedMemory);
-            byte* basePtr = (byte*)NativeArrayUnsafeUtility.GetUnsafePtr(data);
-            var aliveSparseIndicesArray = aliveSparseIndices.AsArray();
-            int* aliveSparseIndicesPtr = elementCount > 0
-                ? (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(aliveSparseIndicesArray)
-                : null;
-
-            int runningOffset = 0;
-            for (int i = 0; i < attributeCount; i++)
-            {
-                var column = source.GetColumnAt(i);
-
-                descriptors[i] = new CompiledAttributeDescriptor
+                var packJob = new PackSparseAttributesJob
                 {
-                    AttributeId = column.AttributeId,
-                    TypeHash = column.TypeHash,
-                    Stride = column.Stride,
-                    Count = elementCount,
-                    OffsetBytes = runningOffset
+                    Plans = plans,
+                    AliveSparseIndices = aliveSparseIndices.AsArray(),
+                    Descriptors = descriptors,
+                    DestinationPtr = basePtr
                 };
+                packJob.Schedule().Complete();
 
-                idToDescriptor[column.AttributeId] = i;
-
-                for (int k = 0; k < elementCount; k++)
-                {
-                    int sparseIndex = aliveSparseIndicesPtr[k];
-                    byte* src = column.Buffer.Ptr + sparseIndex * column.Stride;
-                    byte* dst = basePtr + runningOffset + k * column.Stride;
-                    UnsafeUtility.MemCpy(dst, src, column.Stride);
-                }
-
-                runningOffset += column.Stride * elementCount;
+                return new CompiledAttributeSet(descriptors, idToDescriptor, data);
             }
-
-            return new CompiledAttributeSet(descriptors, idToDescriptor, data);
+            catch
+            {
+                if (data.IsCreated)
+                    data.Dispose();
+                if (descriptors.IsCreated)
+                    descriptors.Dispose();
+                if (idToDescriptor.IsCreated)
+                    idToDescriptor.Dispose();
+                throw;
+            }
+            finally
+            {
+                if (plans.IsCreated)
+                    plans.Dispose();
+            }
         }
 
         private static unsafe CompiledAttributeSet CompileAttributesDense(
@@ -657,41 +634,70 @@ namespace SangriaMesh
 
             var descriptors = new NativeArray<CompiledAttributeDescriptor>(attributeCount, allocator);
             var idToDescriptor = new NativeParallelHashMap<int, int>(math_max(1, attributeCount), allocator);
-
-            int totalBytes = 0;
-            for (int i = 0; i < attributeCount; i++)
+            var plans = BuildAttributePackPlans(source, elementCount, ref idToDescriptor, Allocator.TempJob, out int totalBytes);
+            NativeArray<byte> data = default;
+            try
             {
-                var column = source.GetColumnAt(i);
-                totalBytes += column.Stride * elementCount;
-            }
+                data = new NativeArray<byte>(math_max(1, totalBytes), allocator, NativeArrayOptions.UninitializedMemory);
+                byte* basePtr = (byte*)NativeArrayUnsafeUtility.GetUnsafePtr(data);
 
-            var data = new NativeArray<byte>(math_max(1, totalBytes), allocator, NativeArrayOptions.UninitializedMemory);
-            byte* basePtr = (byte*)NativeArrayUnsafeUtility.GetUnsafePtr(data);
+                var packJob = new PackDenseAttributesJob
+                {
+                    Plans = plans,
+                    Descriptors = descriptors,
+                    DestinationPtr = basePtr
+                };
+                packJob.Schedule().Complete();
+
+                return new CompiledAttributeSet(descriptors, idToDescriptor, data);
+            }
+            catch
+            {
+                if (data.IsCreated)
+                    data.Dispose();
+                if (descriptors.IsCreated)
+                    descriptors.Dispose();
+                if (idToDescriptor.IsCreated)
+                    idToDescriptor.Dispose();
+                throw;
+            }
+            finally
+            {
+                if (plans.IsCreated)
+                    plans.Dispose();
+            }
+        }
+
+        private static unsafe NativeArray<AttributePackPlan> BuildAttributePackPlans(
+            AttributeStore source,
+            int elementCount,
+            ref NativeParallelHashMap<int, int> idToDescriptor,
+            Allocator allocator,
+            out int totalBytes)
+        {
+            int attributeCount = source.GetColumnCount();
+            var plans = new NativeArray<AttributePackPlan>(attributeCount, allocator, NativeArrayOptions.UninitializedMemory);
 
             int runningOffset = 0;
             for (int i = 0; i < attributeCount; i++)
             {
                 var column = source.GetColumnAt(i);
-                int copyBytes = column.Stride * elementCount;
-
-                descriptors[i] = new CompiledAttributeDescriptor
+                plans[i] = new AttributePackPlan
                 {
                     AttributeId = column.AttributeId,
                     TypeHash = column.TypeHash,
                     Stride = column.Stride,
                     Count = elementCount,
-                    OffsetBytes = runningOffset
+                    OffsetBytes = runningOffset,
+                    SourcePtr = column.Buffer.Ptr
                 };
 
                 idToDescriptor[column.AttributeId] = i;
-
-                if (copyBytes > 0)
-                    UnsafeUtility.MemCpy(basePtr + runningOffset, column.Buffer.Ptr, copyBytes);
-
-                runningOffset += copyBytes;
+                runningOffset += column.Stride * elementCount;
             }
 
-            return new CompiledAttributeSet(descriptors, idToDescriptor, data);
+            totalBytes = runningOffset;
+            return plans;
         }
 
         private static unsafe void FillNativeArrayWithMinusOne(NativeArray<int> array)
