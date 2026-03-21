@@ -91,6 +91,53 @@ namespace SangriaMesh
 #endif
         }
 
+        public static void DrawPrimitiveNumbers(this ref NativeDetail detail, Color textColor, float offset = 0.1f)
+        {
+#if UNITY_EDITOR
+            if (detail.TryGetPointAccessor<float3>(AttributeID.Position, out var positionAccessor) != CoreResult.Success)
+                return;
+
+            using var validPrimitives = new NativeList<int>(Allocator.Temp);
+            detail.GetAllValidPrimitives(validPrimitives);
+
+            var style = new GUIStyle
+            {
+                normal = { textColor = textColor },
+                fontSize = 12,
+                fontStyle = FontStyle.Bold
+            };
+
+            float3 labelOffset = new float3(offset, offset, offset);
+
+            for (int i = 0; i < validPrimitives.Length; i++)
+            {
+                int primitiveIndex = validPrimitives[i];
+                var primitiveVertices = detail.GetPrimitiveVertices(primitiveIndex);
+                if (primitiveVertices.Length == 0)
+                    continue;
+
+                float3 center = float3.zero;
+                int validPoints = 0;
+
+                for (int v = 0; v < primitiveVertices.Length; v++)
+                {
+                    int pointIndex = detail.GetVertexPoint(primitiveVertices[v]);
+                    if (pointIndex < 0)
+                        continue;
+
+                    center += positionAccessor[pointIndex];
+                    validPoints++;
+                }
+
+                if (validPoints == 0)
+                    continue;
+
+                center /= validPoints;
+                Handles.Label(center + labelOffset, primitiveIndex.ToString(), style);
+            }
+#endif
+        }
+
         public static void DrawPrimitiveLines(this ref NativeDetail detail, Color lineColor)
         {
             if (detail.TryGetPointAccessor<float3>(AttributeID.Position, out var positionAccessor) != CoreResult.Success)

@@ -24,11 +24,17 @@ public sealed class SangriaMeshExample : MonoBehaviour
     [SerializeField] private bool m_DrawPoints = true;
     [SerializeField] private bool m_DrawWireframe = true;
     [SerializeField] private bool m_DrawNormals;
+    [SerializeField] private bool m_DrawPointNumbers;
+    [SerializeField] private bool m_DrawPrimitiveNumbers;
     [SerializeField, Min(0.001f)] private float m_PointSize = 0.03f;
     [SerializeField, Min(0.001f)] private float m_NormalLength = 0.08f;
+    [SerializeField, Min(0f)] private float m_PointNumberOffset = 0.02f;
+    [SerializeField, Min(0f)] private float m_PrimitiveNumberOffset = 0.02f;
     [SerializeField] private Color m_PointColor = new Color(0.96f, 0.67f, 0.24f, 1f);
     [SerializeField] private Color m_WireColor = new Color(0.20f, 0.80f, 0.98f, 1f);
     [SerializeField] private Color m_NormalColor = new Color(0.45f, 1.00f, 0.45f, 1f);
+    [SerializeField] private Color m_PointNumberColor = Color.white;
+    [SerializeField] private Color m_PrimitiveNumberColor = Color.cyan;
 
     private readonly Stopwatch m_Stopwatch = new Stopwatch();
     private Mesh m_RuntimeMesh;
@@ -183,6 +189,12 @@ public sealed class SangriaMeshExample : MonoBehaviour
 
         if (m_DrawNormals)
             detail.DrawVertexNormalsGizmos(m_NormalLength, m_NormalColor);
+
+        if (m_DrawPointNumbers)
+            detail.DrawPointNumbers(m_PointNumberColor, m_PointNumberOffset);
+
+        if (m_DrawPrimitiveNumbers)
+            detail.DrawPrimitiveNumbers(m_PrimitiveNumberColor, m_PrimitiveNumberOffset);
     }
 
     [ContextMenu("Build SangriaMesh Sphere And Convert To Unity Mesh")]
