@@ -48,9 +48,6 @@ namespace SangriaMesh
                 vertexPolicy != VertexDeletePolicy.FailIfIncidentPrimitivesExist)
                 return false;
 
-            if (m_AdjacencyDirty)
-                return CanRemovePointWhenAdjacencyDirty(pointIndex, pointPolicy, vertexPolicy);
-
             EnsureAdjacencyUpToDate();
             using var pointVertices = new NativeList<int>(Allocator.Temp);
             CollectMultiMapValues(in m_PointToVertices, pointIndex, pointVertices);
@@ -102,9 +99,6 @@ namespace SangriaMesh
                 vertexPolicy != VertexDeletePolicy.DeleteIncidentPrimitives &&
                 vertexPolicy != VertexDeletePolicy.FailIfIncidentPrimitivesExist)
                 return false;
-
-            if (m_AdjacencyDirty)
-                return RemovePointWhenAdjacencyDirty(pointIndex, pointPolicy, vertexPolicy);
 
             EnsureAdjacencyUpToDate();
             using var pointVertices = new NativeList<int>(Allocator.Temp);
@@ -240,9 +234,6 @@ namespace SangriaMesh
                 return true;
             if (policy != VertexDeletePolicy.FailIfIncidentPrimitivesExist)
                 return false;
-
-            if (m_AdjacencyDirty)
-                return !HasIncidentPrimitivesByScan(vertexIndex);
 
             EnsureAdjacencyUpToDate();
             return !HasIncidentPrimitivesNoPrepare(vertexIndex);
