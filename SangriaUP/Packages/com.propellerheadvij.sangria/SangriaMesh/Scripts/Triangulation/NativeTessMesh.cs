@@ -197,6 +197,14 @@ namespace SangriaMesh.NativeTess
         {
             int e = AllocEdge();
             eSym = AllocEdge();
+
+            if (eSym < e)
+            {
+                int tmp = e;
+                e = eSym;
+                eSym = tmp;
+            }
+
             return e;
         }
 
@@ -215,6 +223,14 @@ namespace SangriaMesh.NativeTess
             edgeFreeList.Push(ref edgeFree, idx);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void EnsureFirstEdge(ref int e)
+        {
+            int eSym = edges[e].sym;
+            if (eSym < e)
+                e = eSym;
+        }
+
         public void Splice(int a, int b)
         {
             int aOnext = edges[a].onext;
@@ -231,12 +247,19 @@ namespace SangriaMesh.NativeTess
             int vNew = AllocVertex();
 
             int vPrev = vertices[vNext].prev;
-            vertices.ElementAt(vNew).prev = vPrev;
+            vertices.ElementAt(vNew) = new SweepVertex
+            {
+                prev = vPrev,
+                next = vNext,
+                anEdge = eOrig,
+                coords = float3.zero,
+                s = 0.0f,
+                t = 0.0f,
+                pqHandle = default,
+                n = 0
+            };
             vertices.ElementAt(vPrev).next = vNew;
-            vertices.ElementAt(vNew).next = vNext;
             vertices.ElementAt(vNext).prev = vNew;
-
-            vertices.ElementAt(vNew).anEdge = eOrig;
 
             int e = eOrig;
             do
@@ -251,15 +274,18 @@ namespace SangriaMesh.NativeTess
             int fNew = AllocFace();
 
             int fPrev = faces[fNext].prev;
-            faces.ElementAt(fNew).prev = fPrev;
+            faces.ElementAt(fNew) = new SweepFace
+            {
+                prev = fPrev,
+                next = fNext,
+                anEdge = eOrig,
+                trail = Undef,
+                n = 0,
+                marked = false,
+                inside = faces[fNext].inside
+            };
             faces.ElementAt(fPrev).next = fNew;
-            faces.ElementAt(fNew).next = fNext;
             faces.ElementAt(fNext).prev = fNew;
-
-            faces.ElementAt(fNew).anEdge = eOrig;
-            faces.ElementAt(fNew).trail = Undef;
-            faces.ElementAt(fNew).marked = false;
-            faces.ElementAt(fNew).inside = faces[fNext].inside;
 
             int e = eOrig;
             do
@@ -271,21 +297,10 @@ namespace SangriaMesh.NativeTess
 
         private int MakeEdgeInternal(int eNext)
         {
-            int e = AllocEdge();
-            int eSym = AllocEdge();
+            int e = AllocEdgePair(out int eSym);
 
-            int eNextFirstE = eNext;
+            EnsureFirstEdge(ref eNext);
             int eNextSym = edges[eNext].sym;
-            if (eNext == eNextSym)
-            {
-            }
-            else
-            {
-                if (eNextSym < eNextFirstE)
-                    eNextFirstE = eNextSym;
-                if (eNext != eNextFirstE)
-                    eNext = edges[eNext].sym;
-            }
 
             int ePrev = edges[eNextSym].next;
             edges.ElementAt(eSym).next = ePrev;
@@ -416,7 +431,7 @@ namespace SangriaMesh.NativeTess
 
             edges.ElementAt(edges[eOrg].sym).org = edges[eNew].org;
             vertices.ElementAt(Dst(eNew)).anEdge = edges[eNew].sym;
-            edges.ElementAt(eNew).lface = Rface(eOrg);
+            edges.ElementAt(edges[eNew].sym).lface = Rface(eOrg);
             edges.ElementAt(eNew).winding = edges[eOrg].winding;
             edges.ElementAt(edges[eNew].sym).winding = edges[edges[eOrg].sym].winding;
 
@@ -497,7 +512,7 @@ namespace SangriaMesh.NativeTess
         public void KillVertex(int vDel, int newOrg)
         {
             int eStart = vertices[vDel].anEdge;
-            if (eStart != Undef && newOrg != Undef)
+            if (eStart != Undef)
             {
                 int e = eStart;
                 do
@@ -517,7 +532,7 @@ namespace SangriaMesh.NativeTess
         public void KillFace(int fDel, int newLFace)
         {
             int eStart = faces[fDel].anEdge;
-            if (eStart != Undef && newLFace != Undef)
+            if (eStart != Undef)
             {
                 int e = eStart;
                 do
@@ -536,10 +551,8 @@ namespace SangriaMesh.NativeTess
 
         public void KillEdge(int eDel)
         {
+            EnsureFirstEdge(ref eDel);
             int eDelSym = edges[eDel].sym;
-            int eDelFirst = eDel;
-            if (eDelSym < eDelFirst) eDelFirst = eDelSym;
-            if (eDel != eDelFirst) eDel = eDelSym;
 
             int eNext = edges[eDel].next;
             int ePrev = edges[edges[eDel].sym].next;

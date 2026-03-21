@@ -28,8 +28,9 @@ namespace SangriaMesh.NativeTess
                 TriangulationContourOrientation orientation = options.ContourOrientation;
 
                 for (int ci = 0; ci < contours.ContourCount; ci++)
+                {
                     AddContour(ref state, in contours, ci, orientation);
-
+                }
                 ProjectPolygon(ref state);
                 Sweep.ComputeInterior(ref state);
                 Sweep.TessellateInterior(ref state);
@@ -60,6 +61,7 @@ namespace SangriaMesh.NativeTess
             int e = Undef;
             for (int i = 0; i < count; i++)
             {
+
                 if (e == Undef)
                 {
                     e = s.mesh.MeshMakeEdge();
@@ -227,7 +229,9 @@ namespace SangriaMesh.NativeTess
             {
                 int vHead = s.mesh.vHead;
                 for (int v = s.mesh.vertices[vHead].next; v != vHead; v = s.mesh.vertices[v].next)
+                {
                     s.mesh.vertices.ElementAt(v).t = -s.mesh.vertices[v].t;
+                }
                 s.tUnit = -s.tUnit;
             }
         }
@@ -247,7 +251,9 @@ namespace SangriaMesh.NativeTess
 
             int vHead = s.mesh.vHead;
             for (int v = s.mesh.vertices[vHead].next; v != vHead; v = s.mesh.vertices[v].next)
+            {
                 s.mesh.vertices.ElementAt(v).n = Undef;
+            }
 
             int fHead = s.mesh.fHead;
             for (int f = s.mesh.faces[fHead].next; f != fHead; f = s.mesh.faces[f].next)

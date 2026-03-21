@@ -406,7 +406,10 @@ namespace SangriaMesh.NativeTess
         public static int TopLeftRegion(ref NativeTessState s, int reg)
         {
             int org = s.mesh.Org(s.regions[reg].eUp);
-            do { reg = s.RegionAbove(reg); } while (s.mesh.Org(s.regions[reg].eUp) == org);
+            do
+            {
+                reg = s.RegionAbove(reg);
+            } while (s.mesh.Org(s.regions[reg].eUp) == org);
 
             if (s.regions[reg].fixUpperEdge)
             {
@@ -420,7 +423,10 @@ namespace SangriaMesh.NativeTess
         public static int TopRightRegion(ref NativeTessState s, int reg)
         {
             int dst = s.mesh.Dst(s.regions[reg].eUp);
-            do { reg = s.RegionAbove(reg); } while (s.mesh.Dst(s.regions[reg].eUp) == dst);
+            do
+            {
+                reg = s.RegionAbove(reg);
+            } while (s.mesh.Dst(s.regions[reg].eUp) == dst);
             return reg;
         }
 
@@ -680,7 +686,6 @@ namespace SangriaMesh.NativeTess
                 }
                 SweepEvent(ref s, v);
             }
-
             DoneEdgeDict(ref s);
             RemoveDegenerateFaces(ref s);
         }
@@ -689,9 +694,13 @@ namespace SangriaMesh.NativeTess
         {
             int up = s.mesh.faces[face].anEdge;
             while (Geom.VertLeq(s.mesh.vertices[s.mesh.Dst(up)], s.mesh.vertices[s.mesh.Org(up)]))
+            {
                 up = s.mesh.Lprev(up);
+            }
             while (Geom.VertLeq(s.mesh.vertices[s.mesh.Org(up)], s.mesh.vertices[s.mesh.Dst(up)]))
+            {
                 up = s.mesh.Lnext(up);
+            }
 
             int lo = s.mesh.Lprev(up);
 
@@ -720,7 +729,9 @@ namespace SangriaMesh.NativeTess
             }
 
             while (s.mesh.Lnext(s.mesh.Lnext(lo)) != up)
+            {
                 lo = s.mesh.Sym(s.mesh.Connect(s.mesh.Lnext(lo), lo));
+            }
         }
 
         public static void TessellateInterior(ref NativeTessState s)
