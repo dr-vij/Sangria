@@ -104,36 +104,26 @@ namespace SangriaMesh
     }
 
     /// <summary>
-    /// Reusable triangulation backend state. The current implementation reuses LibTess managed pools while emitting directly to native Sangria topology.
+    /// Reusable triangulation backend state. Kept for API compatibility.
+    /// The native triangulator allocates its own workspace per call.
     /// </summary>
     public sealed class TriangulationScratch : IDisposable
     {
         private bool m_IsDisposed;
-        internal LibTessDotNet.DefaultPool Pool { get; private set; }
-        internal LibTessDotNet.Tess Tess { get; private set; }
 
         public TriangulationScratch()
         {
-            Pool = new LibTessDotNet.DefaultPool();
-            Tess = new LibTessDotNet.Tess(Pool);
-        }
-
-        internal LibTessDotNet.Tess GetTess()
-        {
-            if (m_IsDisposed || Tess == null)
-                throw new ObjectDisposedException(nameof(TriangulationScratch));
-
-            return Tess;
         }
 
         public void Dispose()
         {
-            if (m_IsDisposed)
-                return;
-
-            Tess = null;
-            Pool = null;
             m_IsDisposed = true;
+        }
+
+        internal void ThrowIfDisposed()
+        {
+            if (m_IsDisposed)
+                throw new ObjectDisposedException(nameof(TriangulationScratch));
         }
     }
 
@@ -157,6 +147,8 @@ namespace SangriaMesh
             if (scratch == null)
                 throw new ArgumentNullException(nameof(scratch));
 
+            scratch.ThrowIfDisposed();
+
             CoreResult validation = contours.Validate();
             if (validation != CoreResult.Success)
                 return validation;
@@ -167,7 +159,7 @@ namespace SangriaMesh
             if (contours.ContourCount == 0)
                 return CoreResult.Success;
 
-            return scratch.GetTess().TessellateNative(in contours, ref output, options);
+            return NativeTess.NativeTessAPI.Tessellate(in contours, ref output, in options);
         }
     }
 }
