@@ -1,3 +1,4 @@
+// Core: Metadata entry describing one packed compiled attribute stream.
 namespace SangriaMesh
 {
     public struct CompiledAttributeDescriptor

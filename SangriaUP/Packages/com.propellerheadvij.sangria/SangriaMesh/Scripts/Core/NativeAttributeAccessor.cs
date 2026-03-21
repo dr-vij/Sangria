@@ -1,3 +1,4 @@
+// Core: Typed accessor over mutable native attribute columns.
 using System;
 using System.Runtime.CompilerServices;
 using Unity.Collections.LowLevel.Unsafe;

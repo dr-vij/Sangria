@@ -1,3 +1,4 @@
+// Core: Primitive topology operations and dense topology allocation helpers.
 using System;
 using Unity.Collections;
 

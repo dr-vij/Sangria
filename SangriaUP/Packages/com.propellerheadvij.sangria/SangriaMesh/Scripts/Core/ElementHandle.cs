@@ -1,3 +1,4 @@
+// Core: Stable generational handle for points, vertices, and primitives.
 namespace SangriaMesh
 {
     public readonly struct ElementHandle

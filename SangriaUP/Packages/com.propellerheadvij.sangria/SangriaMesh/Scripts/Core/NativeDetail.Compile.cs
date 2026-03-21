@@ -1,3 +1,4 @@
+// Core: NativeDetail compilation pipeline from mutable sparse state to packed runtime data.
 using System;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -106,7 +107,7 @@ namespace SangriaMesh
                 triangleOnlyTopology);
         }
 
-        private unsafe NativeCompiledDetail CompileSparse(Allocator allocator)
+        private NativeCompiledDetail CompileSparse(Allocator allocator)
         {
             int pointCount = m_Points.Count;
             int vertexCount = m_Vertices.Count;

@@ -1,3 +1,4 @@
+// Core: Columnar native storage for per-domain attributes with typed handles and accessors.
 using System;
 using Unity.Burst;
 using Unity.Collections;
@@ -13,7 +14,7 @@ namespace SangriaMesh
         public UnsafeList<byte> Buffer;
     }
 
-    public unsafe struct AttributeStore : IDisposable
+    public struct AttributeStore : IDisposable
     {
         private readonly Allocator m_Allocator;
         private bool m_IsDisposed;
@@ -41,7 +42,7 @@ namespace SangriaMesh
             return RegisterAttribute<T>(attributeId, m_ElementCapacity);
         }
 
-        public CoreResult RegisterAttribute<T>(int attributeId, int minimumElementCapacity) where T : unmanaged
+        public unsafe CoreResult RegisterAttribute<T>(int attributeId, int minimumElementCapacity) where T : unmanaged
         {
             if (m_IdToColumn.ContainsKey(attributeId))
                 return CoreResult.AlreadyExists;
@@ -160,7 +161,7 @@ namespace SangriaMesh
             return CoreResult.Success;
         }
 
-        public CoreResult TrySet<T>(AttributeHandle<T> handle, int elementIndex, T value) where T : unmanaged
+        public unsafe CoreResult TrySet<T>(AttributeHandle<T> handle, int elementIndex, T value) where T : unmanaged
         {
             if ((uint)elementIndex >= (uint)m_ElementCapacity)
                 return CoreResult.IndexOutOfRange;
@@ -178,7 +179,7 @@ namespace SangriaMesh
             return CoreResult.Success;
         }
 
-        public CoreResult TryGet<T>(AttributeHandle<T> handle, int elementIndex, out T value) where T : unmanaged
+        public unsafe CoreResult TryGet<T>(AttributeHandle<T> handle, int elementIndex, out T value) where T : unmanaged
         {
             value = default;
 
@@ -198,7 +199,7 @@ namespace SangriaMesh
             return CoreResult.Success;
         }
 
-        public void ClearElement(int elementIndex)
+        public unsafe void ClearElement(int elementIndex)
         {
             if ((uint)elementIndex >= (uint)m_ElementCapacity)
                 return;
@@ -211,7 +212,7 @@ namespace SangriaMesh
             }
         }
 
-        public void ClearRange(int startElementIndex, int count)
+        public unsafe void ClearRange(int startElementIndex, int count)
         {
             if (count <= 0)
                 return;

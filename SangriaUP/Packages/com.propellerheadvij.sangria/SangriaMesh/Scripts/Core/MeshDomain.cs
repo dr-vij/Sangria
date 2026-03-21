@@ -1,3 +1,4 @@
+// Core: Domain identifiers for mesh data (point, vertex, primitive).
 namespace SangriaMesh
 {
     public enum MeshDomain : byte

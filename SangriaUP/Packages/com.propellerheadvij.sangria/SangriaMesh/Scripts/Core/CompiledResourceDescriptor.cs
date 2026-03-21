@@ -1,3 +1,4 @@
+// Core: Metadata entry describing one packed compiled resource blob.
 namespace SangriaMesh
 {
     public struct CompiledResourceDescriptor

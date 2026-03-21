@@ -1,3 +1,4 @@
+// Core: Point and vertex topology operations for NativeDetail.
 using System;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;

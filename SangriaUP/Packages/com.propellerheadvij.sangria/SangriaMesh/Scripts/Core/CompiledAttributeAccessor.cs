@@ -1,3 +1,4 @@
+// Core: Pointer-based typed accessor over compiled attribute memory.
 using System;
 using System.Runtime.CompilerServices;
 using Unity.Collections.LowLevel.Unsafe;

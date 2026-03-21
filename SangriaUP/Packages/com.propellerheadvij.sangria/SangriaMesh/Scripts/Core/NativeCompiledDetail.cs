@@ -1,3 +1,4 @@
+// Core: Read-only compiled mesh snapshot with packed topology, attributes, and resources.
 using System;
 using Unity.Collections;
 

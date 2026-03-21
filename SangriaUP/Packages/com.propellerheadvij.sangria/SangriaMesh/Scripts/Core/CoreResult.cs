@@ -1,3 +1,4 @@
+// Core: Result codes returned by core API operations.
 namespace SangriaMesh
 {
     public enum CoreResult : byte

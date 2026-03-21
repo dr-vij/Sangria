@@ -1,3 +1,4 @@
+// Core: Global registry that maps attribute names to stable integer ids.
 using System;
 using System.Collections.Generic;
 
@@ -85,55 +86,6 @@ namespace SangriaMesh
                 return s_NameToId.ContainsKey(name.Trim());
         }
 
-        public static IEnumerable<string> GetAllNames()
-        {
-            lock (s_Lock)
-            {
-                var names = new string[s_NameToId.Count];
-                s_NameToId.Keys.CopyTo(names, 0);
-                return names;
-            }
-        }
-
-        public static IEnumerable<int> GetAllIds()
-        {
-            lock (s_Lock)
-            {
-                var ids = new int[s_IdToName.Count];
-                s_IdToName.Keys.CopyTo(ids, 0);
-                return ids;
-            }
-        }
-
-        public static bool ValidateIntegrity()
-        {
-            lock (s_Lock)
-            {
-                if (s_NameToId.Count != s_IdToName.Count)
-                    return false;
-
-                foreach (var pair in s_NameToId)
-                {
-                    if (!s_IdToName.TryGetValue(pair.Value, out string name) || name != pair.Key)
-                        return false;
-                }
-
-                foreach (var pair in s_IdToName)
-                {
-                    if (!s_NameToId.TryGetValue(pair.Value, out int id) || id != pair.Key)
-                        return false;
-                }
-
-                return true;
-            }
-        }
-
-        public static AttributeIdMetrics GetMetrics()
-        {
-            lock (s_Lock)
-                return new AttributeIdMetrics(s_NameToId.Count, s_NextId);
-        }
-
         private static void ValidateAttributeName(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -144,18 +96,6 @@ namespace SangriaMesh
 
             if (name.Contains('\0'))
                 throw new ArgumentException("Attribute name cannot contain null characters.", nameof(name));
-        }
-    }
-
-    public readonly struct AttributeIdMetrics
-    {
-        public int RegisteredCount { get; }
-        public int NextId { get; }
-
-        public AttributeIdMetrics(int registeredCount, int nextId)
-        {
-            RegisteredCount = registeredCount;
-            NextId = nextId;
         }
     }
 }

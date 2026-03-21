@@ -1,3 +1,4 @@
+// Core: Burst jobs used by NativeDetail for remap, packing, and adjacency build stages.
 using System;
 using System.Runtime.CompilerServices;
 using Unity.Burst;

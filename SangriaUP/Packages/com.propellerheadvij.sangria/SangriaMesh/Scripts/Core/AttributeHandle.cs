@@ -1,3 +1,4 @@
+// Core: Typed handle that caches attribute id, column index, and type hash for fast attribute access.
 namespace SangriaMesh
 {
     public readonly struct AttributeHandle<T> where T : unmanaged

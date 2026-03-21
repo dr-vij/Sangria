@@ -1,3 +1,4 @@
+// Core: Native registry of typed unmanaged resource blobs with compile-to-packed support.
 using System;
 using Unity.Burst;
 using Unity.Collections;
@@ -12,7 +13,7 @@ namespace SangriaMesh
         public int SizeBytes;
     }
 
-    public unsafe struct ResourceRegistry : IDisposable
+    public struct ResourceRegistry : IDisposable
     {
         private readonly Allocator m_Allocator;
         private bool m_IsDisposed;
@@ -28,7 +29,7 @@ namespace SangriaMesh
             m_Resources = new UnsafeParallelHashMap<int, ResourceEntry>(math_max(1, initialCapacity), allocator);
         }
 
-        public CoreResult SetResource<T>(int resourceId, in T value) where T : unmanaged
+        public unsafe CoreResult SetResource<T>(int resourceId, in T value) where T : unmanaged
         {
             int typeHash = BurstRuntime.GetHashCode32<T>();
             int sizeBytes = UnsafeUtility.SizeOf<T>();
@@ -57,7 +58,7 @@ namespace SangriaMesh
             return CoreResult.Success;
         }
 
-        public CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
+        public unsafe CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
         {
             value = default;
 
@@ -89,7 +90,7 @@ namespace SangriaMesh
             return CoreResult.Success;
         }
 
-        public CompiledResourceSet Compile(Allocator allocator)
+        public unsafe CompiledResourceSet Compile(Allocator allocator)
         {
             int count = m_Resources.Count();
             var descriptors = new NativeArray<CompiledResourceDescriptor>(count, allocator);

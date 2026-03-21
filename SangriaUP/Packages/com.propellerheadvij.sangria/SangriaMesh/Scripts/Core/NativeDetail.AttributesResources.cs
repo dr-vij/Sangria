@@ -1,3 +1,4 @@
+// Core: Attribute and resource CRUD API surface for NativeDetail.
 using System;
 
 namespace SangriaMesh

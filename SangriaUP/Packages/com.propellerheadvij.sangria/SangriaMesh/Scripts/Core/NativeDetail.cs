@@ -1,3 +1,4 @@
+// Core: Main mutable mesh container managing topology, attributes, resources, and versioning.
 using System;
 using Unity.Burst;
 using Unity.Collections;

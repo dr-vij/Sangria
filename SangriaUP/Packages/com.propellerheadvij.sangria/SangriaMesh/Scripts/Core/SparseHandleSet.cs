@@ -1,3 +1,4 @@
+// Core: Generational sparse index allocator used to maintain stable element handles.
 using System;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -5,7 +6,7 @@ using Unity.Mathematics;
 
 namespace SangriaMesh
 {
-    public unsafe struct SparseHandleSet : IDisposable
+    public struct SparseHandleSet : IDisposable
     {
         private readonly Allocator m_Allocator;
         private bool m_IsDisposed;
@@ -131,7 +132,7 @@ namespace SangriaMesh
             return m_Generations[index];
         }
 
-        public void GetAliveIndices(NativeList<int> output)
+        public unsafe void GetAliveIndices(NativeList<int> output)
         {
             int usedCount = m_NextUnusedIndex;
             int aliveCount = m_Count;
@@ -230,7 +231,7 @@ namespace SangriaMesh
             m_IsDisposed = true;
         }
 
-        private void EnsureGenerationInitializedRange(int start, int count)
+        private unsafe void EnsureGenerationInitializedRange(int start, int count)
         {
             if (count <= 0)
                 return;
@@ -244,7 +245,7 @@ namespace SangriaMesh
             }
         }
 
-        private void IncrementGenerationRange(int start, int count)
+        private unsafe void IncrementGenerationRange(int start, int count)
         {
             if (count <= 0)
                 return;
@@ -262,7 +263,7 @@ namespace SangriaMesh
             }
         }
 
-        private void ClearGenerationRange(int start, int count)
+        private unsafe void ClearGenerationRange(int start, int count)
         {
             if (count <= 0)
                 return;
@@ -272,7 +273,7 @@ namespace SangriaMesh
             UnsafeUtility.MemClear(dst, count * UnsafeUtility.SizeOf<uint>());
         }
 
-        private static void AppendSetBits(int* outputPtr, ref int writeCursor, ulong bits, int baseIndex)
+        private static unsafe void AppendSetBits(int* outputPtr, ref int writeCursor, ulong bits, int baseIndex)
         {
             if (bits == 0)
                 return;

@@ -1,3 +1,4 @@
+// Core: Policies that define point/vertex deletion behavior during topology edits.
 namespace SangriaMesh
 {
     public enum VertexDeletePolicy : byte

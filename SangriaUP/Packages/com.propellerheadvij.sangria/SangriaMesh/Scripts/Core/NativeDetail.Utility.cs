@@ -1,3 +1,4 @@
+// Core: Internal NativeDetail helpers for adjacency sync, removal flows, and attribute packing.
 using System;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -5,7 +6,7 @@ using Unity.Jobs;
 
 namespace SangriaMesh
 {
-    public unsafe partial struct NativeDetail : IDisposable
+    public partial struct NativeDetail : IDisposable
     {
         #region Utility
 
@@ -91,7 +92,7 @@ namespace SangriaMesh
             }
         }
 
-        private void CollectIncidentPrimitivesByScan(int vertexIndex, NativeList<int> output)
+        private unsafe void CollectIncidentPrimitivesByScan(int vertexIndex, NativeList<int> output)
         {
             output.Clear();
 
@@ -148,7 +149,7 @@ namespace SangriaMesh
             }
         }
 
-        private bool HasIncidentPrimitivesByScan(int vertexIndex)
+        private unsafe bool HasIncidentPrimitivesByScan(int vertexIndex)
         {
             if (m_Primitives.IsDenseContiguous)
             {

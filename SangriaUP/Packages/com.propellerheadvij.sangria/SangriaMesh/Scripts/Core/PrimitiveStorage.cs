@@ -1,3 +1,4 @@
+// Core: Variable-length primitive index storage with dense-triangle fast path and garbage compaction.
 using System;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -11,7 +12,7 @@ namespace SangriaMesh
         public int Capacity;
     }
 
-    public unsafe struct PrimitiveStorage : IDisposable
+    public struct PrimitiveStorage : IDisposable
     {
         private readonly Allocator m_Allocator;
         private bool m_IsDisposed;
@@ -82,7 +83,7 @@ namespace SangriaMesh
             m_IsDenseTriangleLayout = false;
         }
 
-        public void PrepareDenseTriangleRecords(int primitiveCount)
+        public unsafe void PrepareDenseTriangleRecords(int primitiveCount)
         {
             if (primitiveCount <= 0)
             {
@@ -115,7 +116,7 @@ namespace SangriaMesh
             m_GarbageLength = 0;
         }
 
-        public int* GetDataPointerUnchecked()
+        public unsafe int* GetDataPointerUnchecked()
         {
             var dataArray = m_Data.AsArray();
             return (int*)NativeArrayUnsafeUtility.GetUnsafePtr(dataArray);
@@ -240,12 +241,6 @@ namespace SangriaMesh
         public PrimitiveRecord GetRecordUnchecked(int primitiveIndex)
         {
             return m_Records[primitiveIndex];
-        }
-
-        public PrimitiveRecord* GetRecordPointerUnchecked()
-        {
-            var recordsArray = m_Records.AsArray();
-            return (PrimitiveRecord*)NativeArrayUnsafeUtility.GetUnsafePtr(recordsArray);
         }
 
         public NativeArray<PrimitiveRecord> GetRecordsArray()
