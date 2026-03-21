@@ -6,8 +6,6 @@ namespace SangriaMesh
 {
     public partial struct NativeDetail : IDisposable
     {
-        #region Primitive
-
         public int AddPrimitive(NativeArray<int> vertexIndices)
         {
             ThrowIfDisposed();
@@ -234,7 +232,5 @@ namespace SangriaMesh
             ThrowIfDisposed();
             m_Primitives.GetAliveIndices(output);
         }
-
-        #endregion
     }
 }

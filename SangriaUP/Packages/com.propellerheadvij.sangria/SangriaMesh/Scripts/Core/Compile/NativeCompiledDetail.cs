@@ -26,9 +26,9 @@ namespace SangriaMesh
         private int m_PrimitiveCount;
         private bool m_IsTriangleOnlyTopology;
 
-        public readonly NativeArray<int>.ReadOnly VertexToPointDense => m_VertexToPointDense.AsReadOnly();
-        public readonly NativeArray<int>.ReadOnly PrimitiveOffsetsDense => m_PrimitiveOffsetsDense.AsReadOnly();
-        public readonly NativeArray<int>.ReadOnly PrimitiveVerticesDense => m_PrimitiveVerticesDense.AsReadOnly();
+        public NativeArray<int>.ReadOnly VertexToPointDense => m_VertexToPointDense.AsReadOnly();
+        public NativeArray<int>.ReadOnly PrimitiveOffsetsDense => m_PrimitiveOffsetsDense.AsReadOnly();
+        public NativeArray<int>.ReadOnly PrimitiveVerticesDense => m_PrimitiveVerticesDense.AsReadOnly();
 
         public readonly int PointCount => m_PointCount;
         public readonly int VertexCount => m_VertexCount;
@@ -67,7 +67,7 @@ namespace SangriaMesh
             m_IsDisposed = false;
         }
 
-        public readonly CoreResult TryGetAttributeAccessor<T>(MeshDomain domain, int attributeId, out CompiledAttributeAccessor<T> accessor)
+        public CoreResult TryGetAttributeAccessor<T>(MeshDomain domain, int attributeId, out CompiledAttributeAccessor<T> accessor)
             where T : unmanaged
         {
             accessor = default;
@@ -82,7 +82,7 @@ namespace SangriaMesh
             };
         }
 
-        public readonly CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
+        public CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
         {
             ThrowIfDisposed();
             return m_Resources.TryGetResource(resourceId, out value);

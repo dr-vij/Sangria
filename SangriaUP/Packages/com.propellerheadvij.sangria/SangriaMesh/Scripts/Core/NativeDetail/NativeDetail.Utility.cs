@@ -3,13 +3,12 @@ using System;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
+using Unity.Mathematics;
 
 namespace SangriaMesh
 {
-    public partial struct NativeDetail : IDisposable
+    public partial struct NativeDetail
     {
-        #region Utility
-
         public void Clear()
         {
             ThrowIfDisposed();
@@ -109,7 +108,7 @@ namespace SangriaMesh
                 using var incidentPrimitives = new NativeList<int>(Allocator.Temp);
                 CollectMultiMapValues(in m_VertexToPrimitives, vertexIndex, incidentPrimitives);
 
-                using var uniquePrimitiveGuard = new NativeHashSet<int>(math_max(1, incidentPrimitives.Length), Allocator.Temp);
+                using var uniquePrimitiveGuard = new NativeHashSet<int>(math.max(1, incidentPrimitives.Length), Allocator.Temp);
                 for (int i = 0; i < incidentPrimitives.Length; i++)
                 {
                     int primitiveIndex = incidentPrimitives[i];
@@ -147,7 +146,7 @@ namespace SangriaMesh
                 EnsureAdjacencyUpToDate();
 
             var vertices = m_PrimitiveStorage.GetVertices(primitiveIndex);
-            using var uniqueVertices = new NativeHashSet<int>(math_max(1, vertices.Length), Allocator.Temp);
+            using var uniqueVertices = new NativeHashSet<int>(math.max(1, vertices.Length), Allocator.Temp);
             for (int i = 0; i < vertices.Length; i++)
             {
                 int vertexIndex = vertices[i];
@@ -208,8 +207,8 @@ namespace SangriaMesh
             m_Points.GetAliveIndices(alivePoints);
             m_Primitives.GetAliveIndices(alivePrimitives);
 
-            int pointMaskLength = math_max(1, m_Points.MaxIndexExclusive);
-            int vertexMaskLength = math_max(1, m_Vertices.MaxIndexExclusive);
+            int pointMaskLength = math.max(1, m_Points.MaxIndexExclusive);
+            int vertexMaskLength = math.max(1, m_Vertices.MaxIndexExclusive);
             using var pointAliveMask = new NativeArray<byte>(pointMaskLength, Allocator.TempJob, NativeArrayOptions.ClearMemory);
             using var vertexAliveMask = new NativeArray<byte>(vertexMaskLength, Allocator.TempJob, NativeArrayOptions.ClearMemory);
 
@@ -320,7 +319,7 @@ namespace SangriaMesh
             if (required <= map.Capacity)
                 return;
 
-            int newCapacity = math_max(1, map.Capacity);
+            int newCapacity = math.max(1, map.Capacity);
             while (newCapacity < required)
                 newCapacity *= 2;
 
@@ -336,13 +335,13 @@ namespace SangriaMesh
             int elementCount = aliveSparseIndices.Length;
 
             var descriptors = new NativeArray<CompiledAttributeDescriptor>(attributeCount, allocator);
-            var idToDescriptor = new NativeParallelHashMap<int, int>(math_max(1, attributeCount), allocator);
+            var idToDescriptor = new NativeParallelHashMap<int, int>(math.max(1, attributeCount), allocator);
             var plans = BuildAttributePackPlans(source, elementCount, ref idToDescriptor, Allocator.TempJob, out int totalBytes);
             NativeArray<byte> data = default;
             try
             {
-                data = new NativeArray<byte>(math_max(1, totalBytes), allocator, NativeArrayOptions.UninitializedMemory);
-                byte* basePtr = (byte*)NativeArrayUnsafeUtility.GetUnsafePtr(data);
+                data = new NativeArray<byte>(math.max(1, totalBytes), allocator, NativeArrayOptions.UninitializedMemory);
+                byte* basePtr = (byte*)data.GetUnsafePtr();
 
                 var packJob = new PackSparseAttributesJob
                 {
@@ -380,13 +379,13 @@ namespace SangriaMesh
             int attributeCount = source.GetColumnCount();
 
             var descriptors = new NativeArray<CompiledAttributeDescriptor>(attributeCount, allocator);
-            var idToDescriptor = new NativeParallelHashMap<int, int>(math_max(1, attributeCount), allocator);
+            var idToDescriptor = new NativeParallelHashMap<int, int>(math.max(1, attributeCount), allocator);
             var plans = BuildAttributePackPlans(source, elementCount, ref idToDescriptor, Allocator.TempJob, out int totalBytes);
             NativeArray<byte> data = default;
             try
             {
-                data = new NativeArray<byte>(math_max(1, totalBytes), allocator, NativeArrayOptions.UninitializedMemory);
-                byte* basePtr = (byte*)NativeArrayUnsafeUtility.GetUnsafePtr(data);
+                data = new NativeArray<byte>(math.max(1, totalBytes), allocator, NativeArrayOptions.UninitializedMemory);
+                byte* basePtr = (byte*)data.GetUnsafePtr();
 
                 var packJob = new PackDenseAttributesJob
                 {
@@ -452,7 +451,7 @@ namespace SangriaMesh
             if (array.Length <= 0)
                 return;
 
-            UnsafeUtility.MemSet(NativeArrayUnsafeUtility.GetUnsafePtr(array), 0xFF, array.Length * UnsafeUtility.SizeOf<int>());
+            UnsafeUtility.MemSet(array.GetUnsafePtr(), 0xFF, array.Length * UnsafeUtility.SizeOf<int>());
         }
 
         private static unsafe void FillNativeListWithMinusOne(NativeList<int> list, int length)
@@ -461,11 +460,7 @@ namespace SangriaMesh
                 return;
 
             var array = list.AsArray();
-            UnsafeUtility.MemSet(NativeArrayUnsafeUtility.GetUnsafePtr(array), 0xFF, length * UnsafeUtility.SizeOf<int>());
+            UnsafeUtility.MemSet(array.GetUnsafePtr(), 0xFF, length * UnsafeUtility.SizeOf<int>());
         }
-
-        private static int math_max(int a, int b) => a > b ? a : b;
-
-        #endregion
     }
 }

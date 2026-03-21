@@ -145,9 +145,9 @@ namespace SangriaMesh
         {
             EnsureJobSafeAllocator(allocator);
 
-            int pointCap = math_max(1, pointCapacity);
-            int vertexCap = math_max(1, vertexCapacity);
-            int primitiveCap = math_max(1, primitiveCapacity);
+            int pointCap = math.max(1, pointCapacity);
+            int vertexCap = math.max(1, vertexCapacity);
+            int primitiveCap = math.max(1, primitiveCapacity);
 
             m_Allocator = allocator;
             m_IsDisposed = false;

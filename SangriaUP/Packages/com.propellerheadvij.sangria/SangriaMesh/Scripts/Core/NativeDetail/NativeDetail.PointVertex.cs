@@ -1,4 +1,5 @@
 // Core: Point and vertex topology operations for NativeDetail.
+
 using System;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -6,7 +7,7 @@ using Unity.Mathematics;
 
 namespace SangriaMesh
 {
-    public partial struct NativeDetail : IDisposable
+    public partial struct NativeDetail
     {
         #region Point
 
@@ -86,7 +87,7 @@ namespace SangriaMesh
         public bool RemovePoint(int pointIndex)
         {
             ThrowIfDisposed();
-            return RemovePoint(pointIndex, PointDeletePolicy.DeleteIncidentVertices, VertexDeletePolicy.RemoveFromIncidentPrimitives);
+            return RemovePoint(pointIndex, PointDeletePolicy.DeleteIncidentVertices);
         }
 
         public bool RemovePoint(
@@ -276,9 +277,7 @@ namespace SangriaMesh
             return RemoveVertex(vertexIndex, VertexDeletePolicy.RemoveFromIncidentPrimitives);
         }
 
-        public bool RemoveVertex(
-            int vertexIndex,
-            VertexDeletePolicy policy = VertexDeletePolicy.RemoveFromIncidentPrimitives)
+        public bool RemoveVertex(int vertexIndex, VertexDeletePolicy policy)
         {
             ThrowIfDisposed();
             return RemoveVertexInternal(vertexIndex, policy, adjacencyPrepared: false);
@@ -287,10 +286,8 @@ namespace SangriaMesh
         public int GetVertexPoint(int vertexIndex)
         {
             ThrowIfDisposed();
-
             if (!m_Vertices.IsAlive(vertexIndex))
                 return -1;
-
             return m_VertexToPoint[vertexIndex];
         }
 

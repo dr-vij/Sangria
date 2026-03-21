@@ -99,7 +99,7 @@ namespace SangriaMesh
             m_Records.Resize(primitiveCount, NativeArrayOptions.UninitializedMemory);
 
             var recordsArray = m_Records.AsArray();
-            PrimitiveRecord* recordsPtr = (PrimitiveRecord*)NativeArrayUnsafeUtility.GetUnsafePtr(recordsArray);
+            PrimitiveRecord* recordsPtr = (PrimitiveRecord*)recordsArray.GetUnsafePtr();
 
             for (int i = 0; i < primitiveCount; i++)
             {
@@ -119,7 +119,7 @@ namespace SangriaMesh
         public unsafe int* GetDataPointerUnchecked()
         {
             var dataArray = m_Data.AsArray();
-            return (int*)NativeArrayUnsafeUtility.GetUnsafePtr(dataArray);
+            return (int*)dataArray.GetUnsafePtr();
         }
 
         public NativeArray<int> GetDataArray()

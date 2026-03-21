@@ -8,7 +8,7 @@ using Unity.Jobs;
 
 namespace SangriaMesh
 {
-    public partial struct NativeDetail : IDisposable
+    public partial struct NativeDetail
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int RemapPointIndex(int sparsePoint, bool pointsIdentityRemap, int pointCount, NativeArray<int> pointRemap)

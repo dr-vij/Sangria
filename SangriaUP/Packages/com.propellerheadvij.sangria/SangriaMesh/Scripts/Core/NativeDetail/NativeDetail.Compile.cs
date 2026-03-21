@@ -3,10 +3,11 @@ using System;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
+using Unity.Mathematics;
 
 namespace SangriaMesh
 {
-    public partial struct NativeDetail : IDisposable
+    public partial struct NativeDetail
     {
         #region Compile
 
@@ -118,14 +119,14 @@ namespace SangriaMesh
             bool verticesDenseContiguous = m_Vertices.IsDenseContiguous && m_Vertices.MaxIndexExclusive == vertexCount;
             bool primitivesDenseContiguous = m_Primitives.IsDenseContiguous && m_Primitives.MaxIndexExclusive == primitiveCount;
 
-            using var alivePoints = new NativeList<int>(math_max(1, pointCount), Allocator.TempJob);
-            using var aliveVertices = new NativeList<int>(math_max(1, vertexCount), Allocator.TempJob);
-            using var alivePrimitives = new NativeList<int>(math_max(1, primitiveCount), Allocator.TempJob);
+            using var alivePoints = new NativeList<int>(math.max(1, pointCount), Allocator.TempJob);
+            using var aliveVertices = new NativeList<int>(math.max(1, vertexCount), Allocator.TempJob);
+            using var alivePrimitives = new NativeList<int>(math.max(1, primitiveCount), Allocator.TempJob);
             using var emptyIntArray = new NativeArray<int>(0, Allocator.TempJob);
 
             NativeArray<int> pointRemap = default;
             var vertexRemap = new NativeArray<int>(
-                math_max(1, m_Vertices.MaxIndexExclusive),
+                math.max(1, m_Vertices.MaxIndexExclusive),
                 Allocator.TempJob,
                 NativeArrayOptions.ClearMemory);
 
@@ -134,7 +135,7 @@ namespace SangriaMesh
                 if (!pointsIdentityRemap)
                 {
                     pointRemap = new NativeArray<int>(
-                        math_max(1, m_Points.MaxIndexExclusive),
+                        math.max(1, m_Points.MaxIndexExclusive),
                         Allocator.TempJob,
                         NativeArrayOptions.ClearMemory);
 
