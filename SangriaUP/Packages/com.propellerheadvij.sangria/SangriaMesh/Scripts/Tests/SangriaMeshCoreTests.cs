@@ -743,6 +743,51 @@ public class SangriaMeshCoreTests
         }
     }
 
+    [Test]
+    public void BoxGeneratorCreatesExpectedCountsAndCornerSharing()
+    {
+        var detail = SangriaMeshBoxGenerator.CreateBox(new float3(2f, 3f, 4f), Allocator.TempJob);
+        try
+        {
+            var compiled = detail.Compile(Allocator.TempJob);
+            try
+            {
+                Assert.AreEqual(8, compiled.PointCount);
+                Assert.AreEqual(24, compiled.VertexCount);
+                Assert.AreEqual(12, compiled.PrimitiveCount);
+
+                var pointUseCounts = new int[compiled.PointCount];
+                for (int i = 0; i < compiled.VertexToPointDense.Length; i++)
+                    pointUseCounts[compiled.VertexToPointDense[i]]++;
+
+                for (int i = 0; i < pointUseCounts.Length; i++)
+                    Assert.AreEqual(3, pointUseCounts[i], $"Point {i} should be referenced by exactly three face vertices.");
+
+                Assert.AreEqual(
+                    CoreResult.Success,
+                    compiled.TryGetAttributeAccessor<float3>(MeshDomain.Vertex, AttributeID.Normal, out var vertexNormals));
+
+                for (int face = 0; face < 6; face++)
+                {
+                    int faceStart = face * 4;
+                    float3 faceNormal = vertexNormals[faceStart];
+
+                    Assert.AreEqual(faceNormal, vertexNormals[faceStart + 1]);
+                    Assert.AreEqual(faceNormal, vertexNormals[faceStart + 2]);
+                    Assert.AreEqual(faceNormal, vertexNormals[faceStart + 3]);
+                }
+            }
+            finally
+            {
+                compiled.Dispose();
+            }
+        }
+        finally
+        {
+            detail.Dispose();
+        }
+    }
+
     private static float PolygonArea2D(float2[] polygon)
     {
         float area2 = 0f;

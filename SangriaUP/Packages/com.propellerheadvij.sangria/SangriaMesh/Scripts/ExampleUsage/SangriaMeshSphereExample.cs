@@ -3,7 +3,7 @@ using UnityEngine;
 using SangriaMesh;
 using Stopwatch = System.Diagnostics.Stopwatch;
 
-public sealed class SangriaMeshExample : MonoBehaviour
+public sealed class SangriaMeshSphereExample : MonoBehaviour
 {
     [SerializeField, Min(0.01f)] private float m_Radius = 0.5f;
     [SerializeField, Min(3)] private int m_LongitudeSegments = 32;
