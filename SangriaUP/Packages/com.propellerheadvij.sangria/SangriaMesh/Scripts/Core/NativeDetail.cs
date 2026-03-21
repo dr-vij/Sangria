@@ -6,6 +6,10 @@ using Unity.Mathematics;
 
 namespace SangriaMesh
 {
+    /// <summary>
+    /// Owner of editable native mesh memory.
+    /// Do not copy by value. Pass by <c>ref</c> when sharing across APIs.
+    /// </summary>
     [BurstCompile]
     public partial struct NativeDetail : IDisposable
     {
@@ -33,19 +37,104 @@ namespace SangriaMesh
         private uint m_TopologyVersion;
         private uint m_AttributeVersion;
 
-        public int PointCount => m_Points.Count;
-        public int VertexCount => m_Vertices.Count;
-        public int PrimitiveCount => m_Primitives.Count;
+        public int PointCount
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return m_Points.Count;
+            }
+        }
 
-        public int PointCapacity => m_Points.Capacity;
-        public int VertexCapacity => m_Vertices.Capacity;
-        public int PrimitiveCapacity => m_Primitives.Capacity;
-        public int PrimitiveDataLength => m_PrimitiveStorage.DataLength;
-        public int PrimitiveGarbageLength => m_PrimitiveStorage.GarbageLength;
-        public bool PrimitiveHasGarbage => m_PrimitiveStorage.HasGarbage;
+        public int VertexCount
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return m_Vertices.Count;
+            }
+        }
 
-        public uint TopologyVersion => m_TopologyVersion;
-        public uint AttributeVersion => m_AttributeVersion;
+        public int PrimitiveCount
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return m_Primitives.Count;
+            }
+        }
+
+        public int PointCapacity
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return m_Points.Capacity;
+            }
+        }
+
+        public int VertexCapacity
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return m_Vertices.Capacity;
+            }
+        }
+
+        public int PrimitiveCapacity
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return m_Primitives.Capacity;
+            }
+        }
+
+        public int PrimitiveDataLength
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return m_PrimitiveStorage.DataLength;
+            }
+        }
+
+        public int PrimitiveGarbageLength
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return m_PrimitiveStorage.GarbageLength;
+            }
+        }
+
+        public bool PrimitiveHasGarbage
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return m_PrimitiveStorage.HasGarbage;
+            }
+        }
+
+        public uint TopologyVersion
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return m_TopologyVersion;
+            }
+        }
+
+        public uint AttributeVersion
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return m_AttributeVersion;
+            }
+        }
 
         public NativeDetail(int initialCapacity, Allocator allocator)
             : this(initialCapacity, initialCapacity, initialCapacity, allocator)

@@ -9,6 +9,7 @@ namespace SangriaMesh
 
         public CoreResult AddPointAttribute<T>(int attributeId) where T : unmanaged
         {
+            ThrowIfDisposed();
             CoreResult result = m_PointAttributes.RegisterAttribute<T>(attributeId, m_Points.Capacity);
             if (result == CoreResult.Success)
                 m_AttributeVersion++;
@@ -18,6 +19,7 @@ namespace SangriaMesh
 
         public CoreResult AddVertexAttribute<T>(int attributeId) where T : unmanaged
         {
+            ThrowIfDisposed();
             CoreResult result = m_VertexAttributes.RegisterAttribute<T>(attributeId, m_Vertices.Capacity);
             if (result == CoreResult.Success)
                 m_AttributeVersion++;
@@ -27,6 +29,7 @@ namespace SangriaMesh
 
         public CoreResult AddPrimitiveAttribute<T>(int attributeId) where T : unmanaged
         {
+            ThrowIfDisposed();
             CoreResult result = m_PrimitiveAttributes.RegisterAttribute<T>(attributeId, m_Primitives.Capacity);
             if (result == CoreResult.Success)
                 m_AttributeVersion++;
@@ -36,6 +39,8 @@ namespace SangriaMesh
 
         public CoreResult RemovePointAttribute(int attributeId)
         {
+            ThrowIfDisposed();
+
             if (attributeId == AttributeID.Position)
                 return CoreResult.InvalidOperation;
 
@@ -48,6 +53,7 @@ namespace SangriaMesh
 
         public CoreResult RemoveVertexAttribute(int attributeId)
         {
+            ThrowIfDisposed();
             CoreResult result = m_VertexAttributes.RemoveAttribute(attributeId);
             if (result == CoreResult.Success)
                 m_AttributeVersion++;
@@ -57,6 +63,7 @@ namespace SangriaMesh
 
         public CoreResult RemovePrimitiveAttribute(int attributeId)
         {
+            ThrowIfDisposed();
             CoreResult result = m_PrimitiveAttributes.RemoveAttribute(attributeId);
             if (result == CoreResult.Success)
                 m_AttributeVersion++;
@@ -64,30 +71,64 @@ namespace SangriaMesh
             return result;
         }
 
-        public bool HasPointAttribute(int attributeId) => m_PointAttributes.ContainsAttribute(attributeId);
-        public bool HasVertexAttribute(int attributeId) => m_VertexAttributes.ContainsAttribute(attributeId);
-        public bool HasPrimitiveAttribute(int attributeId) => m_PrimitiveAttributes.ContainsAttribute(attributeId);
+        public bool HasPointAttribute(int attributeId)
+        {
+            ThrowIfDisposed();
+            return m_PointAttributes.ContainsAttribute(attributeId);
+        }
+
+        public bool HasVertexAttribute(int attributeId)
+        {
+            ThrowIfDisposed();
+            return m_VertexAttributes.ContainsAttribute(attributeId);
+        }
+
+        public bool HasPrimitiveAttribute(int attributeId)
+        {
+            ThrowIfDisposed();
+            return m_PrimitiveAttributes.ContainsAttribute(attributeId);
+        }
 
         public CoreResult TryGetPointAttributeHandle<T>(int attributeId, out AttributeHandle<T> handle) where T : unmanaged
-            => m_PointAttributes.TryResolveHandle(attributeId, out handle);
+        {
+            ThrowIfDisposed();
+            return m_PointAttributes.TryResolveHandle(attributeId, out handle);
+        }
 
         public CoreResult TryGetVertexAttributeHandle<T>(int attributeId, out AttributeHandle<T> handle) where T : unmanaged
-            => m_VertexAttributes.TryResolveHandle(attributeId, out handle);
+        {
+            ThrowIfDisposed();
+            return m_VertexAttributes.TryResolveHandle(attributeId, out handle);
+        }
 
         public CoreResult TryGetPrimitiveAttributeHandle<T>(int attributeId, out AttributeHandle<T> handle) where T : unmanaged
-            => m_PrimitiveAttributes.TryResolveHandle(attributeId, out handle);
+        {
+            ThrowIfDisposed();
+            return m_PrimitiveAttributes.TryResolveHandle(attributeId, out handle);
+        }
 
         public CoreResult TryGetPointAccessor<T>(int attributeId, out NativeAttributeAccessor<T> accessor) where T : unmanaged
-            => m_PointAttributes.TryGetAccessor(attributeId, out accessor);
+        {
+            ThrowIfDisposed();
+            return m_PointAttributes.TryGetAccessor(attributeId, out accessor);
+        }
 
         public CoreResult TryGetVertexAccessor<T>(int attributeId, out NativeAttributeAccessor<T> accessor) where T : unmanaged
-            => m_VertexAttributes.TryGetAccessor(attributeId, out accessor);
+        {
+            ThrowIfDisposed();
+            return m_VertexAttributes.TryGetAccessor(attributeId, out accessor);
+        }
 
         public CoreResult TryGetPrimitiveAccessor<T>(int attributeId, out NativeAttributeAccessor<T> accessor) where T : unmanaged
-            => m_PrimitiveAttributes.TryGetAccessor(attributeId, out accessor);
+        {
+            ThrowIfDisposed();
+            return m_PrimitiveAttributes.TryGetAccessor(attributeId, out accessor);
+        }
 
         public CoreResult TrySetPointAttribute<T>(int pointIndex, AttributeHandle<T> handle, T value) where T : unmanaged
         {
+            ThrowIfDisposed();
+
             if (!m_Points.IsAlive(pointIndex))
                 return CoreResult.InvalidHandle;
 
@@ -100,6 +141,7 @@ namespace SangriaMesh
 
         public CoreResult TryGetPointAttribute<T>(int pointIndex, AttributeHandle<T> handle, out T value) where T : unmanaged
         {
+            ThrowIfDisposed();
             value = default;
             if (!m_Points.IsAlive(pointIndex))
                 return CoreResult.InvalidHandle;
@@ -109,6 +151,8 @@ namespace SangriaMesh
 
         public CoreResult TrySetVertexAttribute<T>(int vertexIndex, AttributeHandle<T> handle, T value) where T : unmanaged
         {
+            ThrowIfDisposed();
+
             if (!m_Vertices.IsAlive(vertexIndex))
                 return CoreResult.InvalidHandle;
 
@@ -121,6 +165,7 @@ namespace SangriaMesh
 
         public CoreResult TryGetVertexAttribute<T>(int vertexIndex, AttributeHandle<T> handle, out T value) where T : unmanaged
         {
+            ThrowIfDisposed();
             value = default;
             if (!m_Vertices.IsAlive(vertexIndex))
                 return CoreResult.InvalidHandle;
@@ -130,6 +175,8 @@ namespace SangriaMesh
 
         public CoreResult TrySetPrimitiveAttribute<T>(int primitiveIndex, AttributeHandle<T> handle, T value) where T : unmanaged
         {
+            ThrowIfDisposed();
+
             if (!m_Primitives.IsAlive(primitiveIndex))
                 return CoreResult.InvalidHandle;
 
@@ -142,6 +189,7 @@ namespace SangriaMesh
 
         public CoreResult TryGetPrimitiveAttribute<T>(int primitiveIndex, AttributeHandle<T> handle, out T value) where T : unmanaged
         {
+            ThrowIfDisposed();
             value = default;
             if (!m_Primitives.IsAlive(primitiveIndex))
                 return CoreResult.InvalidHandle;
@@ -155,6 +203,7 @@ namespace SangriaMesh
 
         public CoreResult SetResource<T>(int resourceId, in T value) where T : unmanaged
         {
+            ThrowIfDisposed();
             CoreResult result = m_Resources.SetResource(resourceId, value);
             if (result == CoreResult.Success)
                 m_AttributeVersion++;
@@ -163,10 +212,14 @@ namespace SangriaMesh
         }
 
         public CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
-            => m_Resources.TryGetResource(resourceId, out value);
+        {
+            ThrowIfDisposed();
+            return m_Resources.TryGetResource(resourceId, out value);
+        }
 
         public CoreResult RemoveResource(int resourceId)
         {
+            ThrowIfDisposed();
             CoreResult result = m_Resources.RemoveResource(resourceId);
             if (result == CoreResult.Success)
                 m_AttributeVersion++;

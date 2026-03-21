@@ -10,21 +10,26 @@ namespace SangriaMesh
 
         public int AddPrimitive(NativeArray<int> vertexIndices)
         {
+            ThrowIfDisposed();
             return AddPrimitive(vertexIndices, out _);
         }
 
         public int AddPrimitive(NativeArray<int> vertexIndices, out ElementHandle handle)
         {
+            ThrowIfDisposed();
             return AddPrimitive(new NativeSlice<int>(vertexIndices), out handle);
         }
 
         public int AddPrimitive(NativeSlice<int> vertexIndices)
         {
+            ThrowIfDisposed();
             return AddPrimitive(vertexIndices, out _);
         }
 
         public int AddPrimitive(NativeSlice<int> vertexIndices, out ElementHandle handle)
         {
+            ThrowIfDisposed();
+
             if (vertexIndices.Length < 3)
             {
                 handle = default;
@@ -132,11 +137,14 @@ namespace SangriaMesh
 
         public bool RemovePrimitive(int primitiveIndex)
         {
+            ThrowIfDisposed();
             return RemovePrimitiveInternal(primitiveIndex, adjacencyPrepared: false);
         }
 
         public bool AddVertexToPrimitive(int primitiveIndex, int vertexIndex)
         {
+            ThrowIfDisposed();
+
             if (!m_Primitives.IsAlive(primitiveIndex) || !m_Vertices.IsAlive(vertexIndex))
                 return false;
 
@@ -155,6 +163,8 @@ namespace SangriaMesh
 
         public bool RemoveVertexFromPrimitive(int primitiveIndex, int vertexOffset)
         {
+            ThrowIfDisposed();
+
             if (!m_Primitives.IsAlive(primitiveIndex))
                 return false;
 
@@ -177,6 +187,8 @@ namespace SangriaMesh
 
         public NativeSlice<int> GetPrimitiveVertices(int primitiveIndex)
         {
+            ThrowIfDisposed();
+
             if (!m_Primitives.IsAlive(primitiveIndex))
                 return default;
 
@@ -185,6 +197,8 @@ namespace SangriaMesh
 
         public int GetPrimitiveVertexCount(int primitiveIndex)
         {
+            ThrowIfDisposed();
+
             if (!m_Primitives.IsAlive(primitiveIndex))
                 return 0;
 
@@ -193,16 +207,31 @@ namespace SangriaMesh
 
         public bool CollectGarbage(float minGarbageRatio = 0f)
         {
+            ThrowIfDisposed();
             return m_PrimitiveStorage.CollectGarbage(minGarbageRatio);
         }
 
-        public bool IsPrimitiveAlive(int primitiveIndex) => m_Primitives.IsAlive(primitiveIndex);
-        public bool IsPrimitiveHandleValid(ElementHandle handle) => m_Primitives.IsHandleValid(handle);
+        public bool IsPrimitiveAlive(int primitiveIndex)
+        {
+            ThrowIfDisposed();
+            return m_Primitives.IsAlive(primitiveIndex);
+        }
+
+        public bool IsPrimitiveHandleValid(ElementHandle handle)
+        {
+            ThrowIfDisposed();
+            return m_Primitives.IsHandleValid(handle);
+        }
+
         public ElementHandle GetPrimitiveHandle(int primitiveIndex)
-            => m_Primitives.IsAlive(primitiveIndex) ? new ElementHandle(primitiveIndex, m_Primitives.GetGeneration(primitiveIndex)) : default;
+        {
+            ThrowIfDisposed();
+            return m_Primitives.IsAlive(primitiveIndex) ? new ElementHandle(primitiveIndex, m_Primitives.GetGeneration(primitiveIndex)) : default;
+        }
 
         public void GetAllValidPrimitives(NativeList<int> output)
         {
+            ThrowIfDisposed();
             m_Primitives.GetAliveIndices(output);
         }
 

@@ -87,7 +87,7 @@ public sealed class SangriaMeshExample : MonoBehaviour
         }
         finally
         {
-            if (compiled.VertexToPointDense.IsCreated)
+            if (compiled.IsCreated)
                 compiled.Dispose();
         }
 
@@ -152,7 +152,7 @@ public sealed class SangriaMeshExample : MonoBehaviour
         {
             if (Application.isPlaying && m_RuntimeDetailCreated)
             {
-                DrawPreview(m_RuntimeDetail);
+                DrawPreview(ref m_RuntimeDetail);
                 return;
             }
 
@@ -160,7 +160,7 @@ public sealed class SangriaMeshExample : MonoBehaviour
 
             try
             {
-                DrawPreview(detail);
+                DrawPreview(ref detail);
             }
             finally
             {
@@ -173,7 +173,7 @@ public sealed class SangriaMeshExample : MonoBehaviour
         }
     }
 
-    private void DrawPreview(NativeDetail detail)
+    private void DrawPreview(ref NativeDetail detail)
     {
         if (m_DrawWireframe)
             detail.DrawPrimitiveLines(m_WireColor);

@@ -4,25 +4,38 @@ using Unity.Collections;
 
 namespace SangriaMesh
 {
+    /// <summary>
+    /// Owner of compiled native mesh memory.
+    /// Do not copy by value. Pass by <c>in</c>/<c>ref</c> to avoid ownership aliasing.
+    /// </summary>
     public struct NativeCompiledDetail : IDisposable
     {
         private bool m_IsDisposed;
 
-        public NativeArray<int> VertexToPointDense;
-        public NativeArray<int> PrimitiveOffsetsDense;
-        public NativeArray<int> PrimitiveVerticesDense;
+        private NativeArray<int> m_VertexToPointDense;
+        private NativeArray<int> m_PrimitiveOffsetsDense;
+        private NativeArray<int> m_PrimitiveVerticesDense;
 
-        public CompiledAttributeSet PointAttributes;
-        public CompiledAttributeSet VertexAttributes;
-        public CompiledAttributeSet PrimitiveAttributes;
-        public CompiledResourceSet Resources;
+        private CompiledAttributeSet m_PointAttributes;
+        private CompiledAttributeSet m_VertexAttributes;
+        private CompiledAttributeSet m_PrimitiveAttributes;
+        private CompiledResourceSet m_Resources;
 
-        public int PointCount;
-        public int VertexCount;
-        public int PrimitiveCount;
-        public bool IsTriangleOnlyTopology;
-        public bool IsDisposed => m_IsDisposed;
-        public bool IsCreated => !m_IsDisposed && VertexToPointDense.IsCreated;
+        private int m_PointCount;
+        private int m_VertexCount;
+        private int m_PrimitiveCount;
+        private bool m_IsTriangleOnlyTopology;
+
+        public readonly NativeArray<int>.ReadOnly VertexToPointDense => m_VertexToPointDense.AsReadOnly();
+        public readonly NativeArray<int>.ReadOnly PrimitiveOffsetsDense => m_PrimitiveOffsetsDense.AsReadOnly();
+        public readonly NativeArray<int>.ReadOnly PrimitiveVerticesDense => m_PrimitiveVerticesDense.AsReadOnly();
+
+        public readonly int PointCount => m_PointCount;
+        public readonly int VertexCount => m_VertexCount;
+        public readonly int PrimitiveCount => m_PrimitiveCount;
+        public readonly bool IsTriangleOnlyTopology => m_IsTriangleOnlyTopology;
+        public readonly bool IsDisposed => m_IsDisposed;
+        public readonly bool IsCreated => !m_IsDisposed && m_VertexToPointDense.IsCreated;
 
         internal NativeCompiledDetail(
             NativeArray<int> vertexToPointDense,
@@ -37,24 +50,24 @@ namespace SangriaMesh
             int primitiveCount,
             bool isTriangleOnlyTopology)
         {
-            VertexToPointDense = vertexToPointDense;
-            PrimitiveOffsetsDense = primitiveOffsetsDense;
-            PrimitiveVerticesDense = primitiveVerticesDense;
+            m_VertexToPointDense = vertexToPointDense;
+            m_PrimitiveOffsetsDense = primitiveOffsetsDense;
+            m_PrimitiveVerticesDense = primitiveVerticesDense;
 
-            PointAttributes = pointAttributes;
-            VertexAttributes = vertexAttributes;
-            PrimitiveAttributes = primitiveAttributes;
-            Resources = resources;
+            m_PointAttributes = pointAttributes;
+            m_VertexAttributes = vertexAttributes;
+            m_PrimitiveAttributes = primitiveAttributes;
+            m_Resources = resources;
 
-            PointCount = pointCount;
-            VertexCount = vertexCount;
-            PrimitiveCount = primitiveCount;
-            IsTriangleOnlyTopology = isTriangleOnlyTopology;
+            m_PointCount = pointCount;
+            m_VertexCount = vertexCount;
+            m_PrimitiveCount = primitiveCount;
+            m_IsTriangleOnlyTopology = isTriangleOnlyTopology;
 
             m_IsDisposed = false;
         }
 
-        public CoreResult TryGetAttributeAccessor<T>(MeshDomain domain, int attributeId, out CompiledAttributeAccessor<T> accessor)
+        public readonly CoreResult TryGetAttributeAccessor<T>(MeshDomain domain, int attributeId, out CompiledAttributeAccessor<T> accessor)
             where T : unmanaged
         {
             accessor = default;
@@ -62,17 +75,29 @@ namespace SangriaMesh
 
             return domain switch
             {
-                MeshDomain.Point => PointAttributes.TryGetAccessor(attributeId, out accessor),
-                MeshDomain.Vertex => VertexAttributes.TryGetAccessor(attributeId, out accessor),
-                MeshDomain.Primitive => PrimitiveAttributes.TryGetAccessor(attributeId, out accessor),
+                MeshDomain.Point => m_PointAttributes.TryGetAccessor(attributeId, out accessor),
+                MeshDomain.Vertex => m_VertexAttributes.TryGetAccessor(attributeId, out accessor),
+                MeshDomain.Primitive => m_PrimitiveAttributes.TryGetAccessor(attributeId, out accessor),
                 _ => CoreResult.InvalidOperation
             };
         }
 
-        public CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
+        public readonly CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
         {
             ThrowIfDisposed();
-            return Resources.TryGetResource(resourceId, out value);
+            return m_Resources.TryGetResource(resourceId, out value);
+        }
+
+        internal readonly NativeArray<int> GetVertexToPointDenseArrayUnsafe()
+        {
+            ThrowIfDisposed();
+            return m_VertexToPointDense;
+        }
+
+        internal readonly NativeArray<int> GetPrimitiveVerticesDenseArrayUnsafe()
+        {
+            ThrowIfDisposed();
+            return m_PrimitiveVerticesDense;
         }
 
         public void Dispose()
@@ -80,33 +105,33 @@ namespace SangriaMesh
             if (m_IsDisposed)
                 return;
 
-            if (VertexToPointDense.IsCreated)
-                VertexToPointDense.Dispose();
-            if (PrimitiveOffsetsDense.IsCreated)
-                PrimitiveOffsetsDense.Dispose();
-            if (PrimitiveVerticesDense.IsCreated)
-                PrimitiveVerticesDense.Dispose();
+            if (m_VertexToPointDense.IsCreated)
+                m_VertexToPointDense.Dispose();
+            if (m_PrimitiveOffsetsDense.IsCreated)
+                m_PrimitiveOffsetsDense.Dispose();
+            if (m_PrimitiveVerticesDense.IsCreated)
+                m_PrimitiveVerticesDense.Dispose();
 
-            PointAttributes.Dispose();
-            VertexAttributes.Dispose();
-            PrimitiveAttributes.Dispose();
-            Resources.Dispose();
+            m_PointAttributes.Dispose();
+            m_VertexAttributes.Dispose();
+            m_PrimitiveAttributes.Dispose();
+            m_Resources.Dispose();
 
             m_IsDisposed = true;
-            VertexToPointDense = default;
-            PrimitiveOffsetsDense = default;
-            PrimitiveVerticesDense = default;
-            PointAttributes = default;
-            VertexAttributes = default;
-            PrimitiveAttributes = default;
-            Resources = default;
-            PointCount = 0;
-            VertexCount = 0;
-            PrimitiveCount = 0;
-            IsTriangleOnlyTopology = false;
+            m_VertexToPointDense = default;
+            m_PrimitiveOffsetsDense = default;
+            m_PrimitiveVerticesDense = default;
+            m_PointAttributes = default;
+            m_VertexAttributes = default;
+            m_PrimitiveAttributes = default;
+            m_Resources = default;
+            m_PointCount = 0;
+            m_VertexCount = 0;
+            m_PrimitiveCount = 0;
+            m_IsTriangleOnlyTopology = false;
         }
 
-        private void ThrowIfDisposed()
+        private readonly void ThrowIfDisposed()
         {
             if (m_IsDisposed)
                 throw new ObjectDisposedException(nameof(NativeCompiledDetail));

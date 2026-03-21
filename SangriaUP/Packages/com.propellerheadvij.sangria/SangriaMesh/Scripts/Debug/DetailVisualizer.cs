@@ -9,7 +9,7 @@ namespace SangriaMesh
 {
     public static class DetailVisualizer
     {
-        public static void DrawPointGizmos(this NativeDetail detail, float pointSize, Color pointColor)
+        public static void DrawPointGizmos(this ref NativeDetail detail, float pointSize, Color pointColor)
         {
             if (detail.TryGetPointAccessor<float3>(AttributeID.Position, out var positionAccessor) != CoreResult.Success)
                 return;
@@ -30,7 +30,7 @@ namespace SangriaMesh
             Gizmos.color = initialColor;
         }
 
-        public static void DrawVertexNormalsGizmos(this NativeDetail detail, float normalLength, Color normalColor)
+        public static void DrawVertexNormalsGizmos(this ref NativeDetail detail, float normalLength, Color normalColor)
         {
             if (detail.TryGetPointAccessor<float3>(AttributeID.Position, out var positionAccessor) != CoreResult.Success)
                 return;
@@ -65,7 +65,7 @@ namespace SangriaMesh
             Gizmos.color = initialColor;
         }
 
-        public static void DrawPointNumbers(this NativeDetail detail, Color textColor, float offset = 0.1f)
+        public static void DrawPointNumbers(this ref NativeDetail detail, Color textColor, float offset = 0.1f)
         {
 #if UNITY_EDITOR
             if (detail.TryGetPointAccessor<float3>(AttributeID.Position, out var positionAccessor) != CoreResult.Success)
@@ -91,7 +91,7 @@ namespace SangriaMesh
 #endif
         }
 
-        public static void DrawPrimitiveLines(this NativeDetail detail, Color lineColor)
+        public static void DrawPrimitiveLines(this ref NativeDetail detail, Color lineColor)
         {
             if (detail.TryGetPointAccessor<float3>(AttributeID.Position, out var positionAccessor) != CoreResult.Success)
                 return;

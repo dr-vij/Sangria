@@ -12,11 +12,14 @@ namespace SangriaMesh
 
         public int AddPoint(float3 position)
         {
+            ThrowIfDisposed();
             return AddPoint(position, out _);
         }
 
         public int AddPoint(float3 position, out ElementHandle handle)
         {
+            ThrowIfDisposed();
+
             int oldCapacity = m_Points.Capacity;
             int pointIndex = m_Points.Allocate(out handle);
 
@@ -36,6 +39,8 @@ namespace SangriaMesh
             PointDeletePolicy pointPolicy = PointDeletePolicy.DeleteIncidentVertices,
             VertexDeletePolicy vertexPolicy = VertexDeletePolicy.RemoveFromIncidentPrimitives)
         {
+            ThrowIfDisposed();
+
             if (!m_Points.IsAlive(pointIndex))
                 return false;
 
@@ -80,6 +85,7 @@ namespace SangriaMesh
 
         public bool RemovePoint(int pointIndex)
         {
+            ThrowIfDisposed();
             return RemovePoint(pointIndex, PointDeletePolicy.DeleteIncidentVertices, VertexDeletePolicy.RemoveFromIncidentPrimitives);
         }
 
@@ -88,6 +94,8 @@ namespace SangriaMesh
             PointDeletePolicy pointPolicy,
             VertexDeletePolicy vertexPolicy = VertexDeletePolicy.RemoveFromIncidentPrimitives)
         {
+            ThrowIfDisposed();
+
             if (!m_Points.IsAlive(pointIndex))
                 return false;
 
@@ -144,13 +152,28 @@ namespace SangriaMesh
             return removed;
         }
 
-        public bool IsPointAlive(int pointIndex) => m_Points.IsAlive(pointIndex);
-        public bool IsPointHandleValid(ElementHandle handle) => m_Points.IsHandleValid(handle);
+        public bool IsPointAlive(int pointIndex)
+        {
+            ThrowIfDisposed();
+            return m_Points.IsAlive(pointIndex);
+        }
+
+        public bool IsPointHandleValid(ElementHandle handle)
+        {
+            ThrowIfDisposed();
+            return m_Points.IsHandleValid(handle);
+        }
+
         public ElementHandle GetPointHandle(int pointIndex)
-            => m_Points.IsAlive(pointIndex) ? new ElementHandle(pointIndex, m_Points.GetGeneration(pointIndex)) : default;
+        {
+            ThrowIfDisposed();
+            return m_Points.IsAlive(pointIndex) ? new ElementHandle(pointIndex, m_Points.GetGeneration(pointIndex)) : default;
+        }
 
         public float3 GetPointPosition(int pointIndex)
         {
+            ThrowIfDisposed();
+
             if (!m_Points.IsAlive(pointIndex))
                 return default;
 
@@ -159,6 +182,8 @@ namespace SangriaMesh
 
         public bool SetPointPosition(int pointIndex, float3 position)
         {
+            ThrowIfDisposed();
+
             if (!m_Points.IsAlive(pointIndex))
                 return false;
 
@@ -171,6 +196,7 @@ namespace SangriaMesh
 
         public void GetAllValidPoints(NativeList<int> output)
         {
+            ThrowIfDisposed();
             m_Points.GetAliveIndices(output);
         }
 
@@ -180,11 +206,14 @@ namespace SangriaMesh
 
         public int AddVertex(int pointIndex)
         {
+            ThrowIfDisposed();
             return AddVertex(pointIndex, out _);
         }
 
         public int AddVertex(int pointIndex, out ElementHandle handle)
         {
+            ThrowIfDisposed();
+
             if (!m_Points.IsAlive(pointIndex))
             {
                 handle = default;
@@ -226,6 +255,8 @@ namespace SangriaMesh
             int vertexIndex,
             VertexDeletePolicy policy = VertexDeletePolicy.RemoveFromIncidentPrimitives)
         {
+            ThrowIfDisposed();
+
             if (!m_Vertices.IsAlive(vertexIndex))
                 return false;
 
@@ -241,6 +272,7 @@ namespace SangriaMesh
 
         public bool RemoveVertex(int vertexIndex)
         {
+            ThrowIfDisposed();
             return RemoveVertex(vertexIndex, VertexDeletePolicy.RemoveFromIncidentPrimitives);
         }
 
@@ -248,24 +280,41 @@ namespace SangriaMesh
             int vertexIndex,
             VertexDeletePolicy policy = VertexDeletePolicy.RemoveFromIncidentPrimitives)
         {
+            ThrowIfDisposed();
             return RemoveVertexInternal(vertexIndex, policy, adjacencyPrepared: false);
         }
 
         public int GetVertexPoint(int vertexIndex)
         {
+            ThrowIfDisposed();
+
             if (!m_Vertices.IsAlive(vertexIndex))
                 return -1;
 
             return m_VertexToPoint[vertexIndex];
         }
 
-        public bool IsVertexAlive(int vertexIndex) => m_Vertices.IsAlive(vertexIndex);
-        public bool IsVertexHandleValid(ElementHandle handle) => m_Vertices.IsHandleValid(handle);
+        public bool IsVertexAlive(int vertexIndex)
+        {
+            ThrowIfDisposed();
+            return m_Vertices.IsAlive(vertexIndex);
+        }
+
+        public bool IsVertexHandleValid(ElementHandle handle)
+        {
+            ThrowIfDisposed();
+            return m_Vertices.IsHandleValid(handle);
+        }
+
         public ElementHandle GetVertexHandle(int vertexIndex)
-            => m_Vertices.IsAlive(vertexIndex) ? new ElementHandle(vertexIndex, m_Vertices.GetGeneration(vertexIndex)) : default;
+        {
+            ThrowIfDisposed();
+            return m_Vertices.IsAlive(vertexIndex) ? new ElementHandle(vertexIndex, m_Vertices.GetGeneration(vertexIndex)) : default;
+        }
 
         public void GetAllValidVertices(NativeList<int> output)
         {
+            ThrowIfDisposed();
             m_Vertices.GetAliveIndices(output);
         }
 

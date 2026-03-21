@@ -12,6 +12,7 @@ namespace SangriaMesh
 
         public NativeCompiledDetail Compile(Allocator allocator = Allocator.Persistent)
         {
+            ThrowIfDisposed();
             EnsureJobSafeAllocator(allocator);
 
             bool denseContiguous =

@@ -12,6 +12,8 @@ namespace SangriaMesh
 
         public void Clear()
         {
+            ThrowIfDisposed();
+
             m_Points.Clear();
             m_Vertices.Clear();
             m_Primitives.Clear();
@@ -53,6 +55,12 @@ namespace SangriaMesh
             m_Resources.Dispose();
 
             m_IsDisposed = true;
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (m_IsDisposed)
+                throw new ObjectDisposedException(nameof(NativeDetail));
         }
 
         private void EnsureVertexToPointCapacity(int required)

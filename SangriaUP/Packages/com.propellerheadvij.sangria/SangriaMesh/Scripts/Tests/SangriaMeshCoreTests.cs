@@ -663,6 +663,26 @@ public class SangriaMeshCoreTests
     }
 
     [Test]
+    public void DetailThrowsAfterDispose()
+    {
+        var detail = new NativeDetail(4, Allocator.TempJob);
+        detail.Dispose();
+
+        Assert.Throws<System.ObjectDisposedException>(() =>
+        {
+            _ = detail.PointCount;
+        });
+        Assert.Throws<System.ObjectDisposedException>(() =>
+        {
+            detail.AddPoint(new float3(0f, 0f, 0f));
+        });
+        Assert.Throws<System.ObjectDisposedException>(() =>
+        {
+            detail.TryGetResource<int>(GrowthResourceBase, out _);
+        });
+    }
+
+    [Test]
     public void CompiledDetailThrowsAfterDispose()
     {
         var detail = new NativeDetail(4, Allocator.TempJob);

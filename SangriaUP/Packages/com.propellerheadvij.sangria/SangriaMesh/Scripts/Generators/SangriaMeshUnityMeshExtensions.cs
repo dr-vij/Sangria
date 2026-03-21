@@ -47,7 +47,7 @@ namespace SangriaMesh
         /// Converts editable SangriaMesh detail to Unity Mesh.
         /// Supports polygon primitives and triangulates them with ear clipping (fan fallback).
         /// </summary>
-        public static void FillUnityMesh(this NativeDetail detail, Mesh mesh, Allocator allocator = Allocator.TempJob)
+        public static void FillUnityMesh(this ref NativeDetail detail, Mesh mesh, Allocator allocator = Allocator.TempJob)
         {
             NativeCompiledDetail compiled = detail.Compile(allocator);
             try
@@ -64,7 +64,7 @@ namespace SangriaMesh
         /// Converts compiled SangriaMesh detail to Unity Mesh.
         /// Supports polygon primitives and triangulates them with ear clipping (fan fallback).
         /// </summary>
-        public static void FillUnityMesh(this NativeCompiledDetail compiled, Mesh mesh)
+        public static void FillUnityMesh(this in NativeCompiledDetail compiled, Mesh mesh)
         {
             FillUnityMeshInternal(compiled, mesh, assumeTriangleTopology: false);
         }
@@ -72,12 +72,12 @@ namespace SangriaMesh
         /// <summary>
         /// Fast path for known triangle-only topology.
         /// </summary>
-        public static void FillUnityMeshTriangles(this NativeCompiledDetail compiled, Mesh mesh)
+        public static void FillUnityMeshTriangles(this in NativeCompiledDetail compiled, Mesh mesh)
         {
             FillUnityMeshTrianglesMeshData(compiled, mesh);
         }
 
-        private static unsafe void FillUnityMeshTrianglesMeshData(NativeCompiledDetail compiled, Mesh mesh)
+        private static unsafe void FillUnityMeshTrianglesMeshData(in NativeCompiledDetail compiled, Mesh mesh)
         {
             if (mesh == null)
                 throw new ArgumentNullException(nameof(mesh));
@@ -99,8 +99,10 @@ namespace SangriaMesh
             bool hasVertexUv0 =
                 compiled.TryGetAttributeAccessor<float2>(MeshDomain.Vertex, AttributeID.UV0, out var vertexUv0) == CoreResult.Success;
 
+            var vertexToPointDense = compiled.GetVertexToPointDenseArrayUnsafe();
+            var primitiveVerticesDense = compiled.GetPrimitiveVerticesDenseArrayUnsafe();
             int vertexCount = compiled.VertexCount;
-            int indexCount = compiled.PrimitiveVerticesDense.Length;
+            int indexCount = primitiveVerticesDense.Length;
             bool hasNormals = hasVertexNormals || hasPointNormals;
             IndexFormat indexFormat = vertexCount > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
             var layout = ResolveTriangleVertexLayout(hasNormals, hasVertexUv0);
@@ -131,7 +133,7 @@ namespace SangriaMesh
                     uvDst = (float2*)NativeArrayUnsafeUtility.GetUnsafePtr(uvData);
                 }
 
-                int* vertexToPointPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(compiled.VertexToPointDense);
+                int* vertexToPointPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(vertexToPointDense);
                 float3* pointPositionsPtr = pointPositions.GetBasePointer();
                 float3* pointNormalsPtr = hasPointNormals ? pointNormals.GetBasePointer() : null;
                 float3* vertexNormalsPtr = hasVertexNormals ? vertexNormals.GetBasePointer() : null;
@@ -184,14 +186,14 @@ namespace SangriaMesh
                     var indexData = meshData.GetIndexData<int>();
                     UnsafeUtility.MemCpy(
                         NativeArrayUnsafeUtility.GetUnsafePtr(indexData),
-                        NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(compiled.PrimitiveVerticesDense),
+                        NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(primitiveVerticesDense),
                         indexCount * UnsafeUtility.SizeOf<int>());
                 }
                 else
                 {
                     var indexData = meshData.GetIndexData<ushort>();
                     ushort* indexDst = (ushort*)NativeArrayUnsafeUtility.GetUnsafePtr(indexData);
-                    int* indexSrc = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(compiled.PrimitiveVerticesDense);
+                    int* indexSrc = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(primitiveVerticesDense);
 
                     for (int i = 0; i < indexCount; i++)
                         indexDst[i] = (ushort)indexSrc[i];
@@ -228,7 +230,7 @@ namespace SangriaMesh
             }
         }
 
-        private static unsafe void FillUnityMeshInternal(NativeCompiledDetail compiled, Mesh mesh, bool assumeTriangleTopology)
+        private static unsafe void FillUnityMeshInternal(in NativeCompiledDetail compiled, Mesh mesh, bool assumeTriangleTopology)
         {
             if (mesh == null)
                 throw new ArgumentNullException(nameof(mesh));
@@ -363,7 +365,8 @@ namespace SangriaMesh
                     uvDst = (float2*)NativeArrayUnsafeUtility.GetUnsafePtr(uvData);
                 }
 
-                int* vertexToPointPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(compiled.VertexToPointDense);
+                var vertexToPointDense = compiled.GetVertexToPointDenseArrayUnsafe();
+                int* vertexToPointPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(vertexToPointDense);
                 float3* pointPositionsPtr = pointPositions.GetBasePointer();
                 float3* pointNormalsPtr = hasPointNormals ? pointNormals.GetBasePointer() : null;
                 float3* vertexNormalsPtr = hasVertexNormals ? vertexNormals.GetBasePointer() : null;
@@ -468,7 +471,7 @@ namespace SangriaMesh
             return hasUv0 ? TriangleLayoutPositionUv : TriangleLayoutPositionOnly;
         }
 
-        private static bool IsTriangleOnlyTopology(NativeCompiledDetail compiled)
+        private static bool IsTriangleOnlyTopology(in NativeCompiledDetail compiled)
         {
             return compiled.IsTriangleOnlyTopology;
         }
@@ -476,7 +479,7 @@ namespace SangriaMesh
         /// <summary>
         /// Creates a new Unity Mesh from editable SangriaMesh detail.
         /// </summary>
-        public static Mesh ToUnityMesh(this NativeDetail detail, string meshName = "SangriaMesh", Allocator allocator = Allocator.TempJob)
+        public static Mesh ToUnityMesh(this ref NativeDetail detail, string meshName = "SangriaMesh", Allocator allocator = Allocator.TempJob)
         {
             var mesh = new Mesh { name = meshName };
             try
@@ -494,7 +497,7 @@ namespace SangriaMesh
         /// <summary>
         /// Creates a new Unity Mesh from compiled SangriaMesh detail.
         /// </summary>
-        public static Mesh ToUnityMesh(this NativeCompiledDetail compiled, string meshName = "SangriaMesh")
+        public static Mesh ToUnityMesh(this in NativeCompiledDetail compiled, string meshName = "SangriaMesh")
         {
             var mesh = new Mesh { name = meshName };
             try
@@ -512,7 +515,7 @@ namespace SangriaMesh
         /// <summary>
         /// Creates a new Unity Mesh using a fast triangle-only path.
         /// </summary>
-        public static Mesh ToUnityMeshTriangles(this NativeCompiledDetail compiled, string meshName = "SangriaMesh")
+        public static Mesh ToUnityMeshTriangles(this in NativeCompiledDetail compiled, string meshName = "SangriaMesh")
         {
             var mesh = new Mesh { name = meshName };
             try
