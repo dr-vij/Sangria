@@ -20,6 +20,9 @@ namespace SangriaMesh.NativeTess
         public FreeList edgeFreeList;
         public FreeList faceFreeList;
 
+        public UnsafeList<ProvenanceRecord> vertexProvenance;
+        public bool trackProvenance;
+
         public int vHead;
         public int fHead;
         public int eHead;
@@ -27,7 +30,7 @@ namespace SangriaMesh.NativeTess
 
         private const int Undef = -1;
 
-        public static TessMesh Create(int vertexCapacity, int edgeCapacity, int faceCapacity, Allocator allocator)
+        public static TessMesh Create(int vertexCapacity, int edgeCapacity, int faceCapacity, Allocator allocator, bool trackProvenance = true)
         {
             var mesh = new TessMesh
             {
@@ -40,6 +43,10 @@ namespace SangriaMesh.NativeTess
                 vertexFreeList = new FreeList(0),
                 edgeFreeList = new FreeList(0),
                 faceFreeList = new FreeList(0),
+                trackProvenance = trackProvenance,
+                vertexProvenance = trackProvenance
+                    ? new UnsafeList<ProvenanceRecord>(vertexCapacity, allocator)
+                    : default,
             };
 
             mesh.Init();
@@ -90,6 +97,7 @@ namespace SangriaMesh.NativeTess
             if (vertexFree.IsCreated) vertexFree.Dispose();
             if (edgeFree.IsCreated) edgeFree.Dispose();
             if (faceFree.IsCreated) faceFree.Dispose();
+            if (trackProvenance && vertexProvenance.IsCreated) vertexProvenance.Dispose();
         }
 
         public void Reset()
@@ -100,6 +108,7 @@ namespace SangriaMesh.NativeTess
             vertexFree.Clear();
             edgeFree.Clear();
             faceFree.Clear();
+            if (trackProvenance) vertexProvenance.Clear();
             vertexFreeList = new FreeList(0);
             edgeFreeList = new FreeList(0);
             faceFreeList = new FreeList(0);
@@ -157,7 +166,9 @@ namespace SangriaMesh.NativeTess
                 idx = vertices.Length;
                 vertices.Add(default);
                 vertexFree.Add(0);
+                if (trackProvenance) vertexProvenance.Add(default);
             }
+            if (trackProvenance) vertexProvenance[idx] = default;
             return idx;
         }
 

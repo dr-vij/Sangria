@@ -25,7 +25,7 @@ namespace SangriaMesh.NativeTess
         private const int Undef = -1;
         public const float SentinelCoord = 4e30f;
 
-        public static NativeTessState Create(int vertCount, Allocator allocator)
+        public static NativeTessState Create(int vertCount, Allocator allocator, bool trackProvenance = true)
         {
             int edgeCount = vertCount * 4;
             int faceCount = vertCount + 4;
@@ -33,7 +33,7 @@ namespace SangriaMesh.NativeTess
 
             return new NativeTessState
             {
-                mesh = TessMesh.Create(vertCount + 8, edgeCount + 16, faceCount + 8, allocator),
+                mesh = TessMesh.Create(vertCount + 8, edgeCount + 16, faceCount + 8, allocator, trackProvenance),
                 pq = TessPQ.Create(vertCount + 8, allocator),
                 dict = TessDict.Create(regionCount, allocator),
                 regions = new UnsafeList<ActiveRegion>(regionCount, allocator),

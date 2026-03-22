@@ -14,11 +14,31 @@ namespace SangriaMesh.NativeTess
             ref NativeDetail output,
             in TriangulationOptions options)
         {
+            return TessellateInternal(in contours, ref output, in options, false, out _);
+        }
+
+        public static CoreResult Tessellate(
+            in NativeContourSet contours,
+            ref NativeDetail output,
+            out ProvenanceMap provenance,
+            in TriangulationOptions options)
+        {
+            return TessellateInternal(in contours, ref output, in options, true, out provenance);
+        }
+
+        private static CoreResult TessellateInternal(
+            in NativeContourSet contours,
+            ref NativeDetail output,
+            in TriangulationOptions options,
+            bool emitProvenance,
+            out ProvenanceMap provenance)
+        {
+            provenance = default;
             int totalVerts = contours.ContourPointIndices.Length;
             if (totalVerts == 0)
                 return CoreResult.Success;
 
-            var state = NativeTessState.Create(totalVerts, Allocator.Persistent);
+            var state = NativeTessState.Create(totalVerts, Allocator.Persistent, emitProvenance);
             try
             {
                 state.windingRule = MapWindingRule(options.WindingRule);
@@ -35,7 +55,8 @@ namespace SangriaMesh.NativeTess
                 Sweep.ComputeInterior(ref state);
                 Sweep.TessellateInterior(ref state);
 
-                return EmitToNativeDetail(ref state, ref output);
+                return EmitToNativeDetail(ref state, ref output, emitProvenance, out provenance,
+                    contours.Positions.Length);
             }
             finally
             {
@@ -77,7 +98,10 @@ namespace SangriaMesh.NativeTess
                 int pointIndex = contours.ContourPointIndices[start + contourOffset];
                 float3 position = contours.Positions[pointIndex];
 
-                s.mesh.vertices.ElementAt(s.mesh.Org(e)).coords = position;
+                int orgVert = s.mesh.Org(e);
+                s.mesh.vertices.ElementAt(orgVert).coords = position;
+                if (s.mesh.trackProvenance)
+                    s.mesh.vertexProvenance[orgVert] = ProvenanceRecord.Identity(pointIndex);
                 s.mesh.edges.ElementAt(e).winding = 1;
                 s.mesh.edges.ElementAt(s.mesh.Sym(e)).winding = -1;
             }
@@ -244,8 +268,14 @@ namespace SangriaMesh.NativeTess
             return i;
         }
 
-        private static unsafe CoreResult EmitToNativeDetail(ref NativeTessState s, ref NativeDetail output)
+        private static unsafe CoreResult EmitToNativeDetail(
+            ref NativeTessState s,
+            ref NativeDetail output,
+            bool emitProvenance,
+            out ProvenanceMap provenance,
+            int sourcePointCount)
         {
+            provenance = default;
             int pointCount = 0;
             int primitiveCount = 0;
 
@@ -255,16 +285,22 @@ namespace SangriaMesh.NativeTess
                 s.mesh.vertices.ElementAt(v).n = Undef;
             }
 
+            // Pre-filter empty polygons once to avoid double FaceArea computation
             int fHead = s.mesh.fHead;
+            if (s.removeEmptyPolygons)
+            {
+                for (int f = s.mesh.faces[fHead].next; f != fHead; f = s.mesh.faces[f].next)
+                {
+                    if (!s.mesh.faces[f].inside) continue;
+                    float area = Geom.FaceArea(ref s.mesh, f);
+                    if (math.abs(area) < float.Epsilon)
+                        s.mesh.faces.ElementAt(f).inside = false;
+                }
+            }
+
             for (int f = s.mesh.faces[fHead].next; f != fHead; f = s.mesh.faces[f].next)
             {
                 if (!s.mesh.faces[f].inside) continue;
-
-                if (s.removeEmptyPolygons)
-                {
-                    float area = Geom.FaceArea(ref s.mesh, f);
-                    if (math.abs(area) < float.Epsilon) continue;
-                }
 
                 int edge = s.mesh.faces[f].anEdge;
                 int faceVerts = 0;
@@ -301,24 +337,25 @@ namespace SangriaMesh.NativeTess
             int* vertexToPoint = output.GetVertexToPointPointerUnchecked();
             int* primitiveTriangleData = output.GetPrimitiveTriangleDataPointerUnchecked();
 
+            ProvenanceMap provenanceLocal = default;
+            if (emitProvenance)
+                provenanceLocal = new ProvenanceMap(pointCount, sourcePointCount, Allocator.Persistent);
+
             for (int v = s.mesh.vertices[vHead].next; v != vHead; v = s.mesh.vertices[v].next)
             {
                 if (s.mesh.vertices[v].n == Undef) continue;
                 int n = s.mesh.vertices[v].n;
                 pointPositions[n] = s.mesh.vertices[v].coords;
                 vertexToPoint[n] = n;
+
+                if (emitProvenance)
+                    provenanceLocal.Records[n] = s.mesh.vertexProvenance[v];
             }
 
             int primitiveCursor = 0;
             for (int f = s.mesh.faces[fHead].next; f != fHead; f = s.mesh.faces[f].next)
             {
                 if (!s.mesh.faces[f].inside) continue;
-
-                if (s.removeEmptyPolygons)
-                {
-                    float area = Geom.FaceArea(ref s.mesh, f);
-                    if (math.abs(area) < float.Epsilon) continue;
-                }
 
                 int edge = s.mesh.faces[f].anEdge;
                 int firstVertex = s.mesh.vertices[s.mesh.Org(edge)].n;
@@ -337,6 +374,9 @@ namespace SangriaMesh.NativeTess
                     edge = s.mesh.Lnext(edge);
                 }
             }
+
+            if (emitProvenance)
+                provenance = provenanceLocal;
 
             output.MarkTopologyAndAttributeChanged();
             return CoreResult.Success;

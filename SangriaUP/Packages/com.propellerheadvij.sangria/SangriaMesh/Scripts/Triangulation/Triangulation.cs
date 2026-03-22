@@ -121,5 +121,26 @@ namespace SangriaMesh
 
             return NativeTess.NativeTessAPI.Tessellate(in contours, ref output, in options);
         }
+
+        public static CoreResult TriangulateContours(
+            in NativeContourSet contours,
+            ref NativeDetail output,
+            out ProvenanceMap provenance,
+            in TriangulationOptions options = default)
+        {
+            provenance = default;
+
+            CoreResult validation = contours.Validate();
+            if (validation != CoreResult.Success)
+                return validation;
+
+            if (output.PointCount != 0 || output.VertexCount != 0 || output.PrimitiveCount != 0)
+                return CoreResult.InvalidOperation;
+
+            if (contours.ContourCount == 0)
+                return CoreResult.Success;
+
+            return NativeTess.NativeTessAPI.Tessellate(in contours, ref output, out provenance, in options);
+        }
     }
 }

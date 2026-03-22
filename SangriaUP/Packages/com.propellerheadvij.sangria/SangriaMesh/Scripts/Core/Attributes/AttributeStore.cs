@@ -74,6 +74,36 @@ namespace SangriaMesh
             return CoreResult.Success;
         }
 
+        public unsafe CoreResult RegisterAttributeRaw(int attributeId, int stride, int typeHash, int minimumElementCapacity)
+        {
+            if (m_IdToColumn.ContainsKey(attributeId))
+                return CoreResult.AlreadyExists;
+
+            if (minimumElementCapacity > m_ElementCapacity)
+                EnsureCapacity(minimumElementCapacity);
+
+            EnsureIdMapCapacityForInsert();
+
+            int elementCapacity = m_ElementCapacity;
+            int bytes = stride * elementCapacity;
+
+            var buffer = new UnsafeList<byte>(bytes, m_Allocator);
+            buffer.Length = bytes;
+            UnsafeUtility.MemClear(buffer.Ptr, bytes);
+
+            int columnIndex = m_Columns.Length;
+            m_Columns.Add(new AttributeColumn
+            {
+                AttributeId = attributeId,
+                TypeHash = typeHash,
+                Stride = stride,
+                Buffer = buffer
+            });
+
+            m_IdToColumn[attributeId] = columnIndex;
+            return CoreResult.Success;
+        }
+
         public CoreResult RemoveAttribute(int attributeId)
         {
             if (!m_IdToColumn.TryGetValue(attributeId, out int index))

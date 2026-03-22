@@ -228,5 +228,43 @@ namespace SangriaMesh
         }
 
         #endregion
+
+        #region Attribute Transfer Support
+
+        public int GetPointAttributeColumnCount()
+        {
+            ThrowIfDisposed();
+            return m_PointAttributes.GetColumnCount();
+        }
+
+        public AttributeColumn GetPointAttributeColumnAt(int index)
+        {
+            ThrowIfDisposed();
+            return m_PointAttributes.GetColumnAt(index);
+        }
+
+        public AttributeColumn GetPointAttributeColumnByIdUnchecked(int attributeId)
+        {
+            ThrowIfDisposed();
+            int count = m_PointAttributes.GetColumnCount();
+            for (int i = 0; i < count; i++)
+            {
+                var col = m_PointAttributes.GetColumnAt(i);
+                if (col.AttributeId == attributeId)
+                    return col;
+            }
+            return default;
+        }
+
+        public CoreResult AddPointAttributeRaw(int attributeId, int stride, int typeHash)
+        {
+            ThrowIfDisposed();
+            CoreResult result = m_PointAttributes.RegisterAttributeRaw(attributeId, stride, typeHash, m_Points.Capacity);
+            if (result == CoreResult.Success)
+                m_AttributeVersion++;
+            return result;
+        }
+
+        #endregion
     }
 }

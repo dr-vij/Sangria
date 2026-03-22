@@ -9,6 +9,12 @@ namespace SangriaMesh.NativeTess
     {
         private const int Undef = -1;
 
+        private static void SetEdgeSplitProvenance(ref TessMesh mesh, int vertexId, in ProvenanceRecord source)
+        {
+            mesh.vertexProvenance[vertexId] = source;
+            mesh.vertexProvenance.ElementAt(vertexId).Kind = ProvenanceKind.EdgeSplit;
+        }
+
         public static void DeleteRegion(ref NativeTessState s, int reg)
         {
             if (s.regions[reg].fixUpperEdge)
@@ -140,7 +146,33 @@ namespace SangriaMesh.NativeTess
 
         public static void SpliceMergeVertices(ref NativeTessState s, int e1, int e2)
         {
-            s.mesh.MeshSplice(e1, e2);
+            if (s.mesh.trackProvenance)
+            {
+                int v1 = s.mesh.Org(e1);
+                int v2 = s.mesh.Org(e2);
+                var prov1 = s.mesh.vertexProvenance[v1];
+                var prov2 = s.mesh.vertexProvenance[v2];
+
+                ProvenanceRecord combined;
+                // Fast path: both Identity with same source
+                if (prov1.Count == 1 && prov2.Count == 1 && prov1.Src0 == prov2.Src0)
+                {
+                    combined = prov1;
+                    combined.Kind = ProvenanceKind.Merge;
+                }
+                else
+                {
+                    combined = ProvenanceRecord.Combine(in prov1, in prov2, ProvenanceKind.Merge);
+                }
+
+                s.mesh.MeshSplice(e1, e2);
+                int survivor = s.mesh.Org(e1);
+                s.mesh.vertexProvenance[survivor] = combined;
+            }
+            else
+            {
+                s.mesh.MeshSplice(e1, e2);
+            }
         }
 
         public static void GetIntersectData(ref NativeTessState s, int isect, int orgUp, int dstUp, int orgLo, int dstLo)
@@ -157,6 +189,20 @@ namespace SangriaMesh.NativeTess
             float w2 = (t2 / (t1 + t2)) / 2.0f;
             float w3 = (t1 / (t1 + t2)) / 2.0f;
             s.mesh.vertices.ElementAt(isect).coords += w2 * s.mesh.vertices[orgLo].coords + w3 * s.mesh.vertices[dstLo].coords;
+
+            if (s.mesh.trackProvenance)
+            {
+                var provOrgUp = s.mesh.vertexProvenance[orgUp];
+                var provDstUp = s.mesh.vertexProvenance[dstUp];
+                var provOrgLo = s.mesh.vertexProvenance[orgLo];
+                var provDstLo = s.mesh.vertexProvenance[dstLo];
+                s.mesh.vertexProvenance[isect] = ProvenanceRecord.CombineWeighted(
+                    in provOrgUp, w0,
+                    in provDstUp, w1,
+                    in provOrgLo, w2,
+                    in provDstLo, w3,
+                    ProvenanceKind.Intersection);
+            }
         }
 
         public static bool CheckForRightSplice(ref NativeTessState s, int regUp)
@@ -173,6 +219,11 @@ namespace SangriaMesh.NativeTess
                 if (!Geom.VertEq(s.mesh.vertices[s.mesh.Org(eUp)], s.mesh.vertices[s.mesh.Org(eLo)]))
                 {
                     s.mesh.SplitEdge(s.mesh.Sym(eLo));
+                    if (s.mesh.trackProvenance)
+                    {
+                        var provUp = s.mesh.vertexProvenance[s.mesh.Org(eUp)];
+                        SetEdgeSplitProvenance(ref s.mesh, s.mesh.Org(eLo), in provUp);
+                    }
                     s.mesh.MeshSplice(eUp, s.mesh.Oprev(eLo));
                     s.regions.ElementAt(regUp).dirty = true;
                     s.regions.ElementAt(regLo).dirty = true;
@@ -191,6 +242,11 @@ namespace SangriaMesh.NativeTess
                 s.regions.ElementAt(s.RegionAbove(regUp)).dirty = true;
                 s.regions.ElementAt(regUp).dirty = true;
                 s.mesh.SplitEdge(s.mesh.Sym(eUp));
+                if (s.mesh.trackProvenance)
+                {
+                    var provLo = s.mesh.vertexProvenance[s.mesh.Org(eLo)];
+                    SetEdgeSplitProvenance(ref s.mesh, s.mesh.Org(eUp), in provLo);
+                }
                 s.mesh.MeshSplice(s.mesh.Oprev(eLo), eUp);
             }
             return true;
@@ -210,6 +266,11 @@ namespace SangriaMesh.NativeTess
                 s.regions.ElementAt(s.RegionAbove(regUp)).dirty = true;
                 s.regions.ElementAt(regUp).dirty = true;
                 int e = s.mesh.SplitEdge(eUp);
+                if (s.mesh.trackProvenance)
+                {
+                    var provDstLo = s.mesh.vertexProvenance[s.mesh.Dst(eLo)];
+                    SetEdgeSplitProvenance(ref s.mesh, s.mesh.Org(e), in provDstLo);
+                }
                 s.mesh.MeshSplice(s.mesh.Sym(eLo), e);
                 s.mesh.faces.ElementAt(s.mesh.Lface(e)).inside = s.regions[regUp].inside;
             }
@@ -221,6 +282,11 @@ namespace SangriaMesh.NativeTess
                 s.regions.ElementAt(regUp).dirty = true;
                 s.regions.ElementAt(regLo).dirty = true;
                 int e = s.mesh.SplitEdge(eLo);
+                if (s.mesh.trackProvenance)
+                {
+                    var provDstUp = s.mesh.vertexProvenance[s.mesh.Dst(eUp)];
+                    SetEdgeSplitProvenance(ref s.mesh, s.mesh.Org(e), in provDstUp);
+                }
                 s.mesh.MeshSplice(s.mesh.Lnext(eUp), s.mesh.Sym(eLo));
                 s.mesh.faces.ElementAt(s.mesh.Rface(e)).inside = s.regions[regUp].inside;
             }
@@ -284,6 +350,11 @@ namespace SangriaMesh.NativeTess
                 if (dstLo == s.eventVertex)
                 {
                     s.mesh.SplitEdge(s.mesh.Sym(eUp));
+                    if (s.mesh.trackProvenance)
+                    {
+                        var provEvent1 = s.mesh.vertexProvenance[s.eventVertex];
+                        SetEdgeSplitProvenance(ref s.mesh, s.mesh.Org(eUp), in provEvent1);
+                    }
                     s.mesh.MeshSplice(s.mesh.Sym(eLo), eUp);
                     regUp = TopLeftRegion(ref s, regUp);
                     eUp = s.regions[s.RegionBelow(regUp)].eUp;
@@ -294,6 +365,11 @@ namespace SangriaMesh.NativeTess
                 if (dstUp == s.eventVertex)
                 {
                     s.mesh.SplitEdge(s.mesh.Sym(eLo));
+                    if (s.mesh.trackProvenance)
+                    {
+                        var provEvent2 = s.mesh.vertexProvenance[s.eventVertex];
+                        SetEdgeSplitProvenance(ref s.mesh, s.mesh.Org(eLo), in provEvent2);
+                    }
                     s.mesh.MeshSplice(s.mesh.Lnext(eUp), s.mesh.Oprev(eLo));
                     regLo = regUp;
                     regUp = TopRightRegion(ref s, regUp);
@@ -308,6 +384,11 @@ namespace SangriaMesh.NativeTess
                     s.regions.ElementAt(s.RegionAbove(regUp)).dirty = true;
                     s.regions.ElementAt(regUp).dirty = true;
                     s.mesh.SplitEdge(s.mesh.Sym(eUp));
+                    if (s.mesh.trackProvenance)
+                    {
+                        var provEvent3 = s.mesh.vertexProvenance[s.eventVertex];
+                        SetEdgeSplitProvenance(ref s.mesh, s.mesh.Org(eUp), in provEvent3);
+                    }
                     s.mesh.vertices.ElementAt(s.mesh.Org(eUp)).s = s.mesh.vertices[s.eventVertex].s;
                     s.mesh.vertices.ElementAt(s.mesh.Org(eUp)).t = s.mesh.vertices[s.eventVertex].t;
                 }
@@ -316,6 +397,11 @@ namespace SangriaMesh.NativeTess
                     s.regions.ElementAt(regUp).dirty = true;
                     s.regions.ElementAt(regLo).dirty = true;
                     s.mesh.SplitEdge(s.mesh.Sym(eLo));
+                    if (s.mesh.trackProvenance)
+                    {
+                        var provEvent4 = s.mesh.vertexProvenance[s.eventVertex];
+                        SetEdgeSplitProvenance(ref s.mesh, s.mesh.Org(eLo), in provEvent4);
+                    }
                     s.mesh.vertices.ElementAt(s.mesh.Org(eLo)).s = s.mesh.vertices[s.eventVertex].s;
                     s.mesh.vertices.ElementAt(s.mesh.Org(eLo)).t = s.mesh.vertices[s.eventVertex].t;
                 }
@@ -482,6 +568,13 @@ namespace SangriaMesh.NativeTess
             if (!Geom.VertEq(s.mesh.vertices[s.mesh.Dst(e)], s.mesh.vertices[vEvent]))
             {
                 s.mesh.SplitEdge(s.mesh.Sym(e));
+                int newVert = s.mesh.Org(e);
+                if (s.mesh.trackProvenance)
+                {
+                    var provEvent = s.mesh.vertexProvenance[vEvent];
+                    provEvent.Kind = ProvenanceKind.Degenerate;
+                    s.mesh.vertexProvenance[newVert] = provEvent;
+                }
                 if (s.regions[regUp].fixUpperEdge)
                 {
                     s.mesh.MeshDelete(s.mesh.Onext(e));
