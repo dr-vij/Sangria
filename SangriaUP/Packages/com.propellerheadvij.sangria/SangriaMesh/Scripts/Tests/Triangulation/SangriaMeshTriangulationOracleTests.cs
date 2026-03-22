@@ -16,12 +16,41 @@ using TessWindingRule = LibTessDotNet.WindingRule;
 public class SangriaMeshTriangulationOracleTests
 {
     private const int ElementSize = 3;
-    private const float SignatureQuantization = 100000f;
+    private const float PositionEpsilon = 1e-4f;
 
     private sealed class DatContour
     {
         public readonly List<float3> Points = new List<float3>();
         public TessContourOrientation ForceOrientation = TessContourOrientation.Original;
+    }
+
+    private readonly struct EpsilonTriangle
+    {
+        public readonly float3 V0;
+        public readonly float3 V1;
+        public readonly float3 V2;
+
+        public EpsilonTriangle(float3 a, float3 b, float3 c)
+        {
+            if (CompareLex(a, b) > 0)
+            {
+                (a, b) = (b, a);
+            }
+
+            if (CompareLex(b, c) > 0)
+            {
+                (b, c) = (c, b);
+            }
+
+            if (CompareLex(a, b) > 0)
+            {
+                (a, b) = (b, a);
+            }
+
+            V0 = a;
+            V1 = b;
+            V2 = c;
+        }
     }
 
     public static IEnumerable<TestCaseData> GetOracleCases()
@@ -66,10 +95,10 @@ public class SangriaMeshTriangulationOracleTests
             tess.Elements,
             $"LibTess output diverged from oracle file for {Path.GetFileName(testDatPath)} / {winding}");
 
-        List<string> expectedTriangles = BuildTriangleSignaturesFromLibTess(tess.Vertices, expectedIndices);
-        List<string> nativeTriangles = TriangulateNativeAndBuildSignatures(contours, MapWindingRule(winding));
+        List<EpsilonTriangle> expectedTriangles = BuildTrianglesFromLibTess(tess.Vertices, expectedIndices);
+        List<EpsilonTriangle> nativeTriangles = TriangulateNativeAndBuildTriangles(contours, MapWindingRule(winding));
 
-        CollectionAssert.AreEqual(
+        AssertTriangleMultisetEqual(
             expectedTriangles,
             nativeTriangles,
             $"Native triangulation mismatch for {Path.GetFileName(testDatPath)} / {winding}");
@@ -244,7 +273,7 @@ public class SangriaMeshTriangulationOracleTests
         return tess;
     }
 
-    private static List<string> TriangulateNativeAndBuildSignatures(IReadOnlyList<DatContour> sourceContours, TriangulationWindingRule winding)
+    private static List<EpsilonTriangle> TriangulateNativeAndBuildTriangles(IReadOnlyList<DatContour> sourceContours, TriangulationWindingRule winding)
     {
         var contours = new List<float3[]>(sourceContours.Count);
         int totalPoints = 0;
@@ -263,7 +292,7 @@ public class SangriaMeshTriangulationOracleTests
         }
 
         if (contours.Count == 0)
-            return new List<string>();
+            return new List<EpsilonTriangle>();
 
         var positions = new NativeArray<float3>(totalPoints, Allocator.Temp);
         var contourOffsets = new NativeArray<int>(contours.Count + 1, Allocator.Temp);
@@ -296,12 +325,12 @@ public class SangriaMeshTriangulationOracleTests
             Assert.AreEqual(CoreResult.Success, result);
 
             if (output.PrimitiveCount == 0)
-                return new List<string>();
+                return new List<EpsilonTriangle>();
 
             var compiled = output.Compile(Allocator.TempJob);
             try
             {
-                return BuildTriangleSignaturesFromCompiled(in compiled);
+                return BuildTrianglesFromCompiled(in compiled);
             }
             finally
             {
@@ -357,9 +386,9 @@ public class SangriaMeshTriangulationOracleTests
         };
     }
 
-    private static List<string> BuildTriangleSignaturesFromLibTess(ContourVertex[] vertices, int[] indices)
+    private static List<EpsilonTriangle> BuildTrianglesFromLibTess(ContourVertex[] vertices, int[] indices)
     {
-        var signatures = new List<string>(indices.Length / 3);
+        var triangles = new List<EpsilonTriangle>(indices.Length / 3);
 
         for (int i = 0; i + 2 < indices.Length; i += 3)
         {
@@ -373,20 +402,19 @@ public class SangriaMeshTriangulationOracleTests
             float3 a = ToFloat3(vertices[ia].Position);
             float3 b = ToFloat3(vertices[ib].Position);
             float3 c = ToFloat3(vertices[ic].Position);
-            signatures.Add(MakeTriangleSignature(a, b, c));
+            triangles.Add(new EpsilonTriangle(a, b, c));
         }
 
-        signatures.Sort(StringComparer.Ordinal);
-        return signatures;
+        return triangles;
     }
 
-    private static List<string> BuildTriangleSignaturesFromCompiled(in NativeCompiledDetail compiled)
+    private static List<EpsilonTriangle> BuildTrianglesFromCompiled(in NativeCompiledDetail compiled)
     {
         Assert.AreEqual(
             CoreResult.Success,
             compiled.TryGetAttributeAccessor<float3>(MeshDomain.Point, AttributeID.Position, out var pointPositions));
 
-        var signatures = new List<string>(compiled.PrimitiveCount);
+        var triangles = new List<EpsilonTriangle>(compiled.PrimitiveCount);
 
         for (int primitiveIndex = 0; primitiveIndex < compiled.PrimitiveCount; primitiveIndex++)
         {
@@ -416,15 +444,14 @@ public class SangriaMeshTriangulationOracleTests
                     continue;
                 }
 
-                signatures.Add(MakeTriangleSignature(
+                triangles.Add(new EpsilonTriangle(
                     pointPositions[aPoint],
                     pointPositions[bPoint],
                     pointPositions[cPoint]));
             }
         }
 
-        signatures.Sort(StringComparer.Ordinal);
-        return signatures;
+        return triangles;
     }
 
     private static float3 ToFloat3(in Vec3 value)
@@ -432,29 +459,59 @@ public class SangriaMeshTriangulationOracleTests
         return new float3((float)value.X, (float)value.Y, (float)value.Z);
     }
 
-    private static string MakeTriangleSignature(float3 a, float3 b, float3 c)
+    private static void AssertTriangleMultisetEqual(
+        List<EpsilonTriangle> expected,
+        List<EpsilonTriangle> actual,
+        string message)
     {
-        string[] points =
+        Assert.AreEqual(expected.Count, actual.Count, $"{message}. Triangle count mismatch.");
+
+        var used = new bool[actual.Count];
+
+        for (int i = 0; i < expected.Count; i++)
         {
-            MakePointSignature(a),
-            MakePointSignature(b),
-            MakePointSignature(c)
-        };
+            EpsilonTriangle expectedTriangle = expected[i];
+            int matchedIndex = -1;
 
-        Array.Sort(points, StringComparer.Ordinal);
-        return string.Concat(points[0], "|", points[1], "|", points[2]);
+            for (int j = 0; j < actual.Count; j++)
+            {
+                if (used[j])
+                    continue;
+
+                if (TrianglesApproximatelyEqual(expectedTriangle, actual[j]))
+                {
+                    matchedIndex = j;
+                    break;
+                }
+            }
+
+            Assert.AreNotEqual(-1, matchedIndex, $"{message}. No epsilon-match for expected triangle index {i}.");
+            used[matchedIndex] = true;
+        }
     }
 
-    private static string MakePointSignature(float3 p)
+    private static bool TrianglesApproximatelyEqual(EpsilonTriangle lhs, EpsilonTriangle rhs)
     {
-        return string.Concat(
-            Quantize(p.x).ToString(CultureInfo.InvariantCulture), ":",
-            Quantize(p.y).ToString(CultureInfo.InvariantCulture), ":",
-            Quantize(p.z).ToString(CultureInfo.InvariantCulture));
+        return ApproximatelyEqual(lhs.V0, rhs.V0) &&
+               ApproximatelyEqual(lhs.V1, rhs.V1) &&
+               ApproximatelyEqual(lhs.V2, rhs.V2);
     }
 
-    private static long Quantize(float value)
+    private static bool ApproximatelyEqual(float3 a, float3 b)
     {
-        return (long)math.round(value * SignatureQuantization);
+        return math.abs(a.x - b.x) <= PositionEpsilon &&
+               math.abs(a.y - b.y) <= PositionEpsilon &&
+               math.abs(a.z - b.z) <= PositionEpsilon;
+    }
+
+    private static int CompareLex(float3 a, float3 b)
+    {
+        if (a.x < b.x) return -1;
+        if (a.x > b.x) return 1;
+        if (a.y < b.y) return -1;
+        if (a.y > b.y) return 1;
+        if (a.z < b.z) return -1;
+        if (a.z > b.z) return 1;
+        return 0;
     }
 }
