@@ -3,7 +3,7 @@ using System;
 
 namespace SangriaMesh
 {
-    public partial struct NativeDetail : IDisposable
+    public partial struct NativeDetail
     {
         #region Attributes
 

@@ -4,7 +4,7 @@ using Unity.Collections;
 
 namespace SangriaMesh
 {
-    public partial struct NativeDetail : IDisposable
+    public partial struct NativeDetail
     {
         public int AddPrimitive(NativeArray<int> vertexIndices)
         {
