@@ -1,10 +1,16 @@
 # LibTessDotNet Port Plan for Sangria Mesh — Remaining Work
 
+## Immediate Plan (Now)
+
+1. Keep triangulation core zero-allocation and topology-focused.
+2. Emit blend/provenance data for generated vertices (`source ids + weights`), without automatic attribute interpolation in core.
+3. Expose this data to callers so interpolation policy stays user-defined.
+
 ## Completed
 
 The core port is done. The following are already implemented and integrated:
 
-- Public API: `NativeContourSet`, `TriangulationOptions`, `TriangulationScratch`, `Triangulation` static class
+- Public API: `NativeContourSet`, `TriangulationOptions`, `Triangulation` static class
 - Geometric predicates: `NativeTessGeom.cs`
 - Indexed topology workspace: `NativeTessMesh.cs`, `NativeTessTypes.cs`
 - Priority queue: `NativeTessPQ.cs`

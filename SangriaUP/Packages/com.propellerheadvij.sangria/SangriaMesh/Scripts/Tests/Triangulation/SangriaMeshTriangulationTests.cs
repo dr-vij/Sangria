@@ -12,7 +12,6 @@ public class SangriaMeshTriangulationTests
         var contourOffsets = new NativeArray<int>(new[] { 0, 5 }, Allocator.Temp);
         var contourPointIndices = new NativeArray<int>(new[] { 0, 1, 2, 3, 4 }, Allocator.Temp);
         var output = new NativeDetail(8, Allocator.TempJob);
-        using var scratch = new TriangulationScratch();
 
         try
         {
@@ -23,7 +22,7 @@ public class SangriaMeshTriangulationTests
             positions[4] = new float3(0f, 3f, 0f);
 
             var contours = new NativeContourSet(positions, contourOffsets, contourPointIndices);
-            CoreResult result = Triangulation.TriangulateContours(in contours, ref output, scratch, TriangulationOptions.Default);
+            CoreResult result = Triangulation.TriangulateContours(in contours, ref output, TriangulationOptions.Default);
 
             Assert.AreEqual(CoreResult.Success, result);
             Assert.AreEqual(5, output.PointCount);
@@ -70,7 +69,6 @@ public class SangriaMeshTriangulationTests
         var contourOffsets = new NativeArray<int>(new[] { 0, 4, 8 }, Allocator.Temp);
         var contourPointIndices = new NativeArray<int>(new[] { 0, 1, 2, 3, 4, 5, 6, 7 }, Allocator.Temp);
         var output = new NativeDetail(16, Allocator.TempJob);
-        using var scratch = new TriangulationScratch();
 
         try
         {
@@ -88,7 +86,7 @@ public class SangriaMeshTriangulationTests
             var options = TriangulationOptions.Default;
             options.WindingRule = TriangulationWindingRule.EvenOdd;
 
-            CoreResult result = Triangulation.TriangulateContours(in contours, ref output, scratch, in options);
+            CoreResult result = Triangulation.TriangulateContours(in contours, ref output, in options);
 
             Assert.AreEqual(CoreResult.Success, result);
             Assert.Greater(output.PrimitiveCount, 0);

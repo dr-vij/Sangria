@@ -298,7 +298,6 @@ public class SangriaMeshTriangulationOracleTests
         var contourOffsets = new NativeArray<int>(contours.Count + 1, Allocator.Temp);
         var contourPointIndices = new NativeArray<int>(totalPoints, Allocator.Temp);
         var output = new NativeDetail(math.max(64, totalPoints * 4), Allocator.TempJob);
-        using var scratch = new TriangulationScratch();
 
         try
         {
@@ -321,7 +320,7 @@ public class SangriaMeshTriangulationOracleTests
             options.WindingRule = winding;
             options.ContourOrientation = TriangulationContourOrientation.Original;
 
-            CoreResult result = Triangulation.TriangulateContours(in contourSet, ref output, scratch, in options);
+            CoreResult result = Triangulation.TriangulateContours(in contourSet, ref output, in options);
             Assert.AreEqual(CoreResult.Success, result);
 
             if (output.PrimitiveCount == 0)

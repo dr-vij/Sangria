@@ -1,4 +1,3 @@
-using System;
 using Unity.Collections;
 using Unity.Mathematics;
 
@@ -103,30 +102,6 @@ namespace SangriaMesh
         }
     }
 
-    /// <summary>
-    /// Reusable triangulation backend state. Kept for API compatibility.
-    /// The native triangulator allocates its own workspace per call.
-    /// </summary>
-    public sealed class TriangulationScratch : IDisposable
-    {
-        private bool m_IsDisposed;
-
-        public TriangulationScratch()
-        {
-        }
-
-        public void Dispose()
-        {
-            m_IsDisposed = true;
-        }
-
-        internal void ThrowIfDisposed()
-        {
-            if (m_IsDisposed)
-                throw new ObjectDisposedException(nameof(TriangulationScratch));
-        }
-    }
-
     public static class Triangulation
     {
         public static CoreResult TriangulateContours(
@@ -134,21 +109,6 @@ namespace SangriaMesh
             ref NativeDetail output,
             in TriangulationOptions options = default)
         {
-            using var scratch = new TriangulationScratch();
-            return TriangulateContours(in contours, ref output, scratch, in options);
-        }
-
-        public static CoreResult TriangulateContours(
-            in NativeContourSet contours,
-            ref NativeDetail output,
-            TriangulationScratch scratch,
-            in TriangulationOptions options = default)
-        {
-            if (scratch == null)
-                throw new ArgumentNullException(nameof(scratch));
-
-            scratch.ThrowIfDisposed();
-
             CoreResult validation = contours.Validate();
             if (validation != CoreResult.Success)
                 return validation;
