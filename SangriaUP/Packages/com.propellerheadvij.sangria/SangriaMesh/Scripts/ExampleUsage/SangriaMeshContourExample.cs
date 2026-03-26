@@ -3,6 +3,12 @@ using Unity.Mathematics;
 using UnityEngine;
 using SangriaMesh;
 using Stopwatch = System.Diagnostics.Stopwatch;
+using Tess = LibTessDotNet.Tess;
+using TessContourVertex = LibTessDotNet.ContourVertex;
+using TessContourOrientation = LibTessDotNet.ContourOrientation;
+using TessElementType = LibTessDotNet.ElementType;
+using TessVec3 = LibTessDotNet.Vec3;
+using TessWindingRule = LibTessDotNet.WindingRule;
 
 /// <summary>
 /// Realtime contour tessellation example.
@@ -45,6 +51,7 @@ public sealed class SangriaMeshContourExample : MonoBehaviour
     [SerializeField] private MeshFilter m_TargetMeshFilter;
     [SerializeField] private bool m_LogTimings;
     [SerializeField, Min(1)] private int m_LogEveryNFrames = 60;
+    [SerializeField] private bool m_CompareWithLibTess = true;
 
     [Header("Gizmo Preview")]
     [SerializeField] private bool m_DrawPreview = true;
@@ -137,10 +144,13 @@ public sealed class SangriaMeshContourExample : MonoBehaviour
 
         long collectTicks = 0;
         long tessTicks = 0;
+        long libTessTicks = 0;
         long compileTicks = 0;
         long bakeTicks = 0;
         int compiledPointCount = 0;
         int compiledPrimitiveCount = 0;
+        int libTessVertexCount = 0;
+        int libTessElementCount = 0;
         NativeCompiledDetail compiled = default;
 
         try
@@ -175,6 +185,15 @@ public sealed class SangriaMeshContourExample : MonoBehaviour
                         Debug.LogWarning($"[SangriaMeshContourExample] Triangulation failed: {result}");
                     m_RuntimeMesh.Clear();
                     return;
+                }
+
+                if (m_CompareWithLibTess)
+                {
+                    libTessTicks = MeasureLibTessTessellateTicks(
+                        positions,
+                        contourOffsets,
+                        out libTessVertexCount,
+                        out libTessElementCount);
                 }
             }
             finally
@@ -213,7 +232,10 @@ public sealed class SangriaMeshContourExample : MonoBehaviour
                 $"bake={TicksToMs(bakeTicks):F3}ms " +
                 $"inputPoints={totalPoints} " +
                 $"outputPoints={compiledPointCount} " +
-                $"outputPrims={compiledPrimitiveCount}");
+                $"outputPrims={compiledPrimitiveCount}" +
+                (m_CompareWithLibTess
+                    ? $" libTess={TicksToMs(libTessTicks):F3}ms libVerts={libTessVertexCount} libElems={libTessElementCount}"
+                    : string.Empty));
         }
     }
 
@@ -475,5 +497,73 @@ public sealed class SangriaMeshContourExample : MonoBehaviour
     private static double TicksToMs(long ticks)
     {
         return ticks * 1000.0 / Stopwatch.Frequency;
+    }
+
+    private long MeasureLibTessTessellateTicks(
+        NativeArray<float3> positions,
+        NativeArray<int> contourOffsets,
+        out int vertexCount,
+        out int elementCount)
+    {
+        var tess = new Tess();
+
+        for (int contourIndex = 0; contourIndex + 1 < contourOffsets.Length; contourIndex++)
+        {
+            int start = contourOffsets[contourIndex];
+            int end = contourOffsets[contourIndex + 1];
+            int pointCount = end - start;
+            if (pointCount < 3)
+                continue;
+
+            var contour = new TessContourVertex[pointCount];
+            for (int i = 0; i < pointCount; i++)
+            {
+                float3 p = positions[start + i];
+                contour[i] = new TessContourVertex(new TessVec3(p.x, p.y, p.z));
+            }
+
+            tess.AddContour(contour, MapContourOrientation(m_Orientation));
+        }
+
+        m_Stopwatch.Restart();
+        tess.Tessellate(
+            MapWindingRule(m_WindingRule),
+            TessElementType.Polygons,
+            polySize: 3,
+            combineCallback: null,
+            normal: ToVec3(GetTriangulationNormal()));
+        long ticks = m_Stopwatch.ElapsedTicks;
+
+        vertexCount = tess.VertexCount;
+        elementCount = tess.ElementCount;
+        return ticks;
+    }
+
+    private static TessWindingRule MapWindingRule(TriangulationWindingRule windingRule)
+    {
+        return windingRule switch
+        {
+            TriangulationWindingRule.EvenOdd => TessWindingRule.EvenOdd,
+            TriangulationWindingRule.NonZero => TessWindingRule.NonZero,
+            TriangulationWindingRule.Positive => TessWindingRule.Positive,
+            TriangulationWindingRule.Negative => TessWindingRule.Negative,
+            TriangulationWindingRule.AbsGeqTwo => TessWindingRule.AbsGeqTwo,
+            _ => TessWindingRule.EvenOdd
+        };
+    }
+
+    private static TessContourOrientation MapContourOrientation(TriangulationContourOrientation orientation)
+    {
+        return orientation switch
+        {
+            TriangulationContourOrientation.Clockwise => TessContourOrientation.Clockwise,
+            TriangulationContourOrientation.CounterClockwise => TessContourOrientation.CounterClockwise,
+            _ => TessContourOrientation.Original
+        };
+    }
+
+    private static TessVec3 ToVec3(float3 value)
+    {
+        return new TessVec3(value.x, value.y, value.z);
     }
 }
