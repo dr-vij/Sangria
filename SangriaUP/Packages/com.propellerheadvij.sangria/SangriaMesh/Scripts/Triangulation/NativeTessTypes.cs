@@ -33,7 +33,9 @@ namespace SangriaMesh.NativeTess
         public int prev, next;
         public int trail;
         public int n;
+        [MarshalAs(UnmanagedType.U1)]
         public bool marked;
+        [MarshalAs(UnmanagedType.U1)]
         public bool inside;
     }
 
@@ -56,9 +58,13 @@ namespace SangriaMesh.NativeTess
         public int eUp;
         public int nodeUp;
         public int windingNumber;
+        [MarshalAs(UnmanagedType.U1)]
         public bool inside;
+        [MarshalAs(UnmanagedType.U1)]
         public bool sentinel;
+        [MarshalAs(UnmanagedType.U1)]
         public bool dirty;
+        [MarshalAs(UnmanagedType.U1)]
         public bool fixUpperEdge;
     }
 

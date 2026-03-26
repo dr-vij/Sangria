@@ -1,10 +1,12 @@
 using System;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
 
 namespace SangriaMesh.NativeTess
 {
+    [BurstCompile]
     internal static class NativeTessAPI
     {
         private const int Undef = -1;
@@ -47,13 +49,7 @@ namespace SangriaMesh.NativeTess
 
                 TriangulationContourOrientation orientation = options.ContourOrientation;
 
-                for (int ci = 0; ci < contours.ContourCount; ci++)
-                {
-                    AddContour(ref state, in contours, ci, orientation);
-                }
-                ProjectPolygon(ref state);
-                Sweep.ComputeInterior(ref state);
-                Sweep.TessellateInterior(ref state);
+                RunAlgorithmBurst(ref state, in contours, orientation);
 
                 return EmitToNativeDetail(ref state, ref output, emitProvenance, out provenance,
                     contours.Positions.Length);
@@ -62,6 +58,21 @@ namespace SangriaMesh.NativeTess
             {
                 state.Dispose();
             }
+        }
+
+        [BurstCompile]
+        private static void RunAlgorithmBurst(
+            ref NativeTessState state,
+            in NativeContourSet contours,
+            TriangulationContourOrientation orientation)
+        {
+            for (int ci = 0; ci < contours.ContourCount; ci++)
+            {
+                AddContour(ref state, in contours, ci, orientation);
+            }
+            ProjectPolygon(ref state);
+            Sweep.ComputeInterior(ref state);
+            Sweep.TessellateInterior(ref state);
         }
 
         private static void AddContour(ref NativeTessState s, in NativeContourSet contours, int contourIndex, TriangulationContourOrientation forceOrientation)

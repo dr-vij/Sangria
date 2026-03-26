@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
@@ -20,6 +21,7 @@ namespace SangriaMesh.NativeTess
         public float3 sUnit;
         public float3 tUnit;
         public float bminX, bminY, bmaxX, bmaxY;
+        [MarshalAs(UnmanagedType.U1)]
         public bool removeEmptyPolygons;
 
         private const int Undef = -1;

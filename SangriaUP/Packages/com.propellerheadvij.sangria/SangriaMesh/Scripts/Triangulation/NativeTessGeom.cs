@@ -1,10 +1,12 @@
 using System;
 using System.Runtime.CompilerServices;
+using Unity.Burst;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
 
 namespace SangriaMesh.NativeTess
 {
+    [BurstCompile]
     internal static class Geom
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

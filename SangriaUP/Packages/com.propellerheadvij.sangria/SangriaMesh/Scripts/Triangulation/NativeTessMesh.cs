@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
@@ -21,6 +22,7 @@ namespace SangriaMesh.NativeTess
         public FreeList faceFreeList;
 
         public UnsafeList<ProvenanceRecord> vertexProvenance;
+        [MarshalAs(UnmanagedType.U1)]
         public bool trackProvenance;
 
         public int vHead;

@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
@@ -13,6 +14,7 @@ namespace SangriaMesh.NativeTess
         private int m_Size;
         private int m_Max;
         private int m_FreeList;
+        [MarshalAs(UnmanagedType.U1)]
         private bool m_Initialized;
 
         public bool Empty => m_Size == 0;
@@ -195,6 +197,7 @@ namespace SangriaMesh.NativeTess
         private UnsafeList<int> m_Order;
         private int m_Size;
         private int m_Max;
+        [MarshalAs(UnmanagedType.U1)]
         private bool m_Initialized;
 
         public bool Empty => m_Size == 0 && m_Heap.Empty;

@@ -1,10 +1,12 @@
 using System;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
 
 namespace SangriaMesh.NativeTess
 {
+    [BurstCompile]
     internal static class Sweep
     {
         private const int Undef = -1;
