@@ -1,6 +1,6 @@
 {
-    "name": "OctreeTests",
-    "rootNamespace": "",
+    "name": "SangriaMesh.OctreeTests",
+    "rootNamespace": "SangriaMesh.Tests.Octree",
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",

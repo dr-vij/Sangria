@@ -9,124 +9,125 @@ using UnityEngine;
 using Debug = UnityEngine.Debug;
 using Random = UnityEngine.Random;
 
-public class OctreeTests
+namespace SangriaMesh.Tests.Octree
 {
-    AABB Bounds => new AABB{Center = 0, Extents = 1000};
-
-    float3[] GetValues()
+    public class OctreeTests
     {
-        Random.InitState(0);
-        var values = new float3[20000];
+        AABB Bounds => new AABB{Center = 0, Extents = 1000};
 
-        for (int x = 0; x < values.Length; x++) {
-            var val = new int3(Random.Range(-900, 900), Random.Range(-900, 900), Random.Range(-900, 900));
-            values[x] = val;
+        float3[] GetValues()
+        {
+            Random.InitState(0);
+            var values = new float3[20000];
+
+            for (int x = 0; x < values.Length; x++) {
+                var val = new int3(Random.Range(-900, 900), Random.Range(-900, 900), Random.Range(-900, 900));
+                values[x] = val;
+            }
+
+            return values;
         }
 
-        return values;
-    }
-
-    [Test]
-    public void InsertTriggerDivideBulk()
-    {
-        var values = GetValues();
-
-        var elements = new NativeArray<OctElement<int>>(values.Length, Allocator.TempJob);
-
-        for (int i = 0; i < values.Length; i++)
+        [Test]
+        public void InsertTriggerDivideBulk()
         {
-            elements[i] = new OctElement<int>
+            var values = GetValues();
+            var elements = new NativeArray<OctElement<int>>(values.Length, Allocator.TempJob);
+
+            for (int i = 0; i < values.Length; i++)
             {
-                pos = values[i],
-                element = i
-            };
-        }
+                elements[i] = new OctElement<int>
+                {
+                    pos = values[i],
+                    element = i
+                };
+            }
 
-        var job = new OctreeJobs.AddBulkJob<int>
-        {
-            Elements = elements,
-            Octree = new NativeOctree<int>(Bounds)
-        };
-
-        var s = Stopwatch.StartNew();
-
-        job.Run();
-
-        s.Stop();
-        Debug.Log(s.Elapsed.TotalMilliseconds);
-
-        OctreeDrawer.Draw(job.Octree);
-        job.Octree.Dispose();
-        elements.Dispose();
-    }
-
-    [Test]
-    public void RangeQueryAfterBulk()
-    {
-        var values = GetValues();
-
-        NativeArray<OctElement<int>> elements = new NativeArray<OctElement<int>>(values.Length, Allocator.TempJob);
-
-        for (int i = 0; i < values.Length; i++)
-        {
-            elements[i] = new OctElement<int>
+            var job = new OctreeJobs.AddBulkJob<int>
             {
-                pos = values[i],
-                element = i
+                Elements = elements,
+                Octree = new NativeOctree<int>(Bounds)
             };
+
+            var s = Stopwatch.StartNew();
+
+            job.Run();
+
+            s.Stop();
+            Debug.Log(s.Elapsed.TotalMilliseconds);
+
+            OctreeDrawer.Draw(job.Octree);
+            job.Octree.Dispose();
+            elements.Dispose();
         }
 
-        var octree = new NativeOctree<int>(Bounds);
-        octree.ClearAndBulkInsert(elements);
-
-        var queryJob = new OctreeJobs.RangeQueryJob<int>
+        [Test]
+        public void RangeQueryAfterBulk()
         {
-            Octree = octree,
-            Bounds = new AABB {Center = float3.zero, Extents = new float3(200, 200, 200)},
-            Results = new NativeList<OctElement<int>>(1000, Allocator.TempJob)
-        };
+            var values = GetValues();
+            NativeArray<OctElement<int>> elements = new NativeArray<OctElement<int>>(values.Length, Allocator.TempJob);
 
-        var s = Stopwatch.StartNew();
-        queryJob.Run();
-        s.Stop();
-        Debug.Log(s.Elapsed.TotalMilliseconds + " result: " + queryJob.Results.Length);
-
-        OctreeDrawer.DrawWithResults(queryJob);
-        octree.Dispose();
-        elements.Dispose();
-        queryJob.Results.Dispose();
-    }
-
-    [Test]
-    public void InsertTriggerDivideNonBurstBulk()
-    {
-        var values = GetValues();
-
-        var positions = new NativeArray<float3>(values.Length, Allocator.TempJob);
-        var octree = new NativeOctree<int>(Bounds);
-
-        positions.CopyFrom(values);
-
-        NativeArray<OctElement<int>> elements = new NativeArray<OctElement<int>>(positions.Length, Allocator.Temp);
-
-        for (int i = 0; i < positions.Length; i++)
-        {
-            elements[i] = new OctElement<int>
+            for (int i = 0; i < values.Length; i++)
             {
-                pos = positions[i],
-                element = i
+                elements[i] = new OctElement<int>
+                {
+                    pos = values[i],
+                    element = i
+                };
+            }
+
+            var octree = new NativeOctree<int>(Bounds);
+            octree.ClearAndBulkInsert(elements);
+
+            var queryJob = new OctreeJobs.RangeQueryJob<int>
+            {
+                Octree = octree,
+                Bounds = new AABB {Center = float3.zero, Extents = new float3(200, 200, 200)},
+                Results = new NativeList<OctElement<int>>(1000, Allocator.TempJob)
             };
+
+            var s = Stopwatch.StartNew();
+            queryJob.Run();
+            s.Stop();
+            Debug.Log(s.Elapsed.TotalMilliseconds + " result: " + queryJob.Results.Length);
+
+            OctreeDrawer.DrawWithResults(queryJob);
+            octree.Dispose();
+            elements.Dispose();
+            queryJob.Results.Dispose();
         }
 
-        var s = Stopwatch.StartNew();
+        [Test]
+        public void InsertTriggerDivideNonBurstBulk()
+        {
+            var values = GetValues();
+            var positions = new NativeArray<float3>(values.Length, Allocator.TempJob);
+            var octree = new NativeOctree<int>(Bounds);
 
-        octree.ClearAndBulkInsert(elements);
+            positions.CopyFrom(values);
 
-        s.Stop();
-        Debug.Log(s.Elapsed.TotalMilliseconds);
+            NativeArray<OctElement<int>> elements = new NativeArray<OctElement<int>>(positions.Length, Allocator.Temp);
 
-        OctreeDrawer.Draw(octree);
-        octree.Dispose();
-        positions.Dispose();
+            for (int i = 0; i < positions.Length; i++)
+            {
+                elements[i] = new OctElement<int>
+                {
+                    pos = positions[i],
+                    element = i
+                };
+            }
+
+            var s = Stopwatch.StartNew();
+
+            octree.ClearAndBulkInsert(elements);
+
+            s.Stop();
+            Debug.Log(s.Elapsed.TotalMilliseconds);
+
+            OctreeDrawer.Draw(octree);
+            octree.Dispose();
+            elements.Dispose();
+            positions.Dispose();
+        }
     }
 }
