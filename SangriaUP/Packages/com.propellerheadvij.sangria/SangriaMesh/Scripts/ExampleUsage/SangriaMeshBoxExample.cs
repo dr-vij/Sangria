@@ -44,6 +44,8 @@ public sealed class SangriaMeshBoxExample : MonoBehaviour
     [SerializeField] private Color m_NormalColor = new Color(0.45f, 1.00f, 0.45f, 1f);
     [SerializeField] private Color m_PointNumberColor = Color.white;
     [SerializeField] private Color m_PrimitiveNumberColor = Color.cyan;
+    [Header("Random Colors")]
+    [SerializeField] private bool m_ApplyRandomColors = true;
 
     private readonly Stopwatch m_Stopwatch = new Stopwatch();
     private Mesh m_RuntimeMesh;
@@ -86,6 +88,9 @@ public sealed class SangriaMeshBoxExample : MonoBehaviour
 
             if (m_RemoveFacePrimitives)
                 removedFacePrimitives = RemoveFacePrimitivePair(ref m_RuntimeDetail);
+
+            if (m_ApplyRandomColors)
+                ApplyRandomVertexColors(ref m_RuntimeDetail);
 
             editTicks = m_Stopwatch.ElapsedTicks;
 
@@ -214,6 +219,9 @@ public sealed class SangriaMeshBoxExample : MonoBehaviour
         Mesh unityMesh = null;
         try
         {
+            if (m_ApplyRandomColors)
+                ApplyRandomVertexColors(ref detail);
+
             var compiled = detail.Compile(Allocator.TempJob);
             try
             {
@@ -325,5 +333,27 @@ public sealed class SangriaMeshBoxExample : MonoBehaviour
             removedCount++;
 
         return removedCount;
+    }
+
+    private void ApplyRandomVertexColors(ref NativeDetail detail)
+    {
+        detail.AddVertexAttribute<Color>(AttributeID.Color);
+        if (detail.TryGetVertexAccessor<Color>(AttributeID.Color, out var colorAccessor) != CoreResult.Success)
+            return;
+
+        unsafe
+        {
+            Color* colorPtr = colorAccessor.GetBasePointer();
+            int vertexCapacity = detail.VertexCapacity;
+            var random = new Unity.Mathematics.Random((uint)(Time.frameCount + 1));
+
+            for (int i = 0; i < vertexCapacity; i++)
+            {
+                if (detail.IsVertexAlive(i))
+                {
+                    colorPtr[i] = new Color(random.NextFloat(), random.NextFloat(), random.NextFloat(), 1f);
+                }
+            }
+        }
     }
 }
