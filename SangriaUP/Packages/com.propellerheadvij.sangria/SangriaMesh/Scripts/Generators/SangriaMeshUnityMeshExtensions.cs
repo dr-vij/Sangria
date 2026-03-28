@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
@@ -99,135 +100,20 @@ namespace SangriaMesh
             bool hasVertexUv0 =
                 compiled.TryGetAttributeAccessor<float2>(MeshDomain.Vertex, AttributeID.UV0, out var vertexUv0) == CoreResult.Success;
 
-            var vertexToPointDense = compiled.GetVertexToPointDenseArrayUnsafe();
             var primitiveVerticesDense = compiled.GetPrimitiveVerticesDenseArrayUnsafe();
-            int vertexCount = compiled.VertexCount;
-            int indexCount = primitiveVerticesDense.Length;
-            bool hasNormals = hasVertexNormals || hasPointNormals;
-            IndexFormat indexFormat = vertexCount > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
-            var layout = ResolveTriangleVertexLayout(hasNormals, hasVertexUv0);
-
-            var meshDataArray = Mesh.AllocateWritableMeshData(1);
-            bool meshDataApplied = false;
-            try
-            {
-                var meshData = meshDataArray[0];
-                meshData.SetVertexBufferParams(vertexCount, layout);
-                meshData.SetIndexBufferParams(indexCount, indexFormat);
-
-                var positionData = meshData.GetVertexData<float3>(0);
-                float3* positionDst = (float3*)NativeArrayUnsafeUtility.GetUnsafePtr(positionData);
-
-                float3* normalDst = null;
-                if (hasNormals)
-                {
-                    var normalData = meshData.GetVertexData<float3>(1);
-                    normalDst = (float3*)NativeArrayUnsafeUtility.GetUnsafePtr(normalData);
-                }
-
-                float2* uvDst = null;
-                if (hasVertexUv0)
-                {
-                    int uvStream = hasNormals ? 2 : 1;
-                    var uvData = meshData.GetVertexData<float2>(uvStream);
-                    uvDst = (float2*)NativeArrayUnsafeUtility.GetUnsafePtr(uvData);
-                }
-
-                int* vertexToPointPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(vertexToPointDense);
-                float3* pointPositionsPtr = pointPositions.GetBasePointer();
-                float3* pointNormalsPtr = hasPointNormals ? pointNormals.GetBasePointer() : null;
-                float3* vertexNormalsPtr = hasVertexNormals ? vertexNormals.GetBasePointer() : null;
-                float2* vertexUv0Ptr = hasVertexUv0 ? vertexUv0.GetBasePointer() : null;
-                int pointCount = pointPositions.Length;
-
-                float minX = 0f, minY = 0f, minZ = 0f;
-                float maxX = 0f, maxY = 0f, maxZ = 0f;
-                bool hasBounds = false;
-
-                for (int vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
-                {
-                    int pointIndex = vertexToPointPtr[vertexIndex];
-                    bool pointIndexValid = (uint)pointIndex < (uint)pointCount;
-                    float3 position = pointIndexValid ? pointPositionsPtr[pointIndex] : default;
-                    positionDst[vertexIndex] = position;
-
-                    if (!hasBounds)
-                    {
-                        minX = maxX = position.x;
-                        minY = maxY = position.y;
-                        minZ = maxZ = position.z;
-                        hasBounds = true;
-                    }
-                    else
-                    {
-                        if (position.x < minX) minX = position.x;
-                        else if (position.x > maxX) maxX = position.x;
-
-                        if (position.y < minY) minY = position.y;
-                        else if (position.y > maxY) maxY = position.y;
-
-                        if (position.z < minZ) minZ = position.z;
-                        else if (position.z > maxZ) maxZ = position.z;
-                    }
-
-                    if (hasNormals)
-                    {
-                        normalDst[vertexIndex] = hasVertexNormals
-                            ? vertexNormalsPtr[vertexIndex]
-                            : (pointIndexValid ? pointNormalsPtr[pointIndex] : default);
-                    }
-
-                    if (hasVertexUv0)
-                        uvDst[vertexIndex] = vertexUv0Ptr[vertexIndex];
-                }
-
-                if (indexFormat == IndexFormat.UInt32)
-                {
-                    var indexData = meshData.GetIndexData<int>();
-                    UnsafeUtility.MemCpy(
-                        NativeArrayUnsafeUtility.GetUnsafePtr(indexData),
-                        NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(primitiveVerticesDense),
-                        indexCount * UnsafeUtility.SizeOf<int>());
-                }
-                else
-                {
-                    var indexData = meshData.GetIndexData<ushort>();
-                    ushort* indexDst = (ushort*)NativeArrayUnsafeUtility.GetUnsafePtr(indexData);
-                    int* indexSrc = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(primitiveVerticesDense);
-
-                    for (int i = 0; i < indexCount; i++)
-                        indexDst[i] = (ushort)indexSrc[i];
-                }
-
-                meshData.subMeshCount = 1;
-                var subMeshDescriptor = new SubMeshDescriptor(0, indexCount, MeshTopology.Triangles)
-                {
-                    bounds = hasBounds
-                        ? new Bounds(
-                            new Vector3(
-                                (minX + maxX) * 0.5f,
-                                (minY + maxY) * 0.5f,
-                                (minZ + maxZ) * 0.5f),
-                            new Vector3(
-                                maxX - minX,
-                                maxY - minY,
-                                maxZ - minZ))
-                        : new Bounds(Vector3.zero, Vector3.zero)
-                };
-
-                meshData.SetSubMesh(0, subMeshDescriptor, TriangleSetSubMeshFlags);
-                Mesh.ApplyAndDisposeWritableMeshData(meshDataArray, mesh, TriangleApplyFlags);
-                meshDataApplied = true;
-                mesh.bounds = subMeshDescriptor.bounds;
-                if (!hasNormals)
-                    mesh.RecalculateNormals();
-            }
-            catch
-            {
-                if (!meshDataApplied)
-                    meshDataArray.Dispose();
-                throw;
-            }
+            int* triangleIndicesPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(primitiveVerticesDense);
+            ApplyTriangleMeshData(
+                compiled,
+                mesh,
+                pointPositions,
+                hasVertexNormals,
+                vertexNormals,
+                hasPointNormals,
+                pointNormals,
+                hasVertexUv0,
+                vertexUv0,
+                triangleIndicesPtr,
+                primitiveVerticesDense.Length);
         }
 
         private static unsafe void FillUnityMeshInternal(in NativeCompiledDetail compiled, Mesh mesh, bool assumeTriangleTopology)
@@ -333,9 +219,39 @@ namespace SangriaMesh
                     triangleWriteIndex);
             }
 
+            fixed (int* trianglesPtr = triangles)
+            {
+                ApplyTriangleMeshData(
+                    compiled,
+                    mesh,
+                    pointPositions,
+                    hasVertexNormals,
+                    vertexNormals,
+                    hasPointNormals,
+                    pointNormals,
+                    hasVertexUv0,
+                    vertexUv0,
+                    trianglesPtr,
+                    triangles.Length);
+            }
+        }
+
+        private static unsafe void ApplyTriangleMeshData(
+            in NativeCompiledDetail compiled,
+            Mesh mesh,
+            in CompiledAttributeAccessor<float3> pointPositions,
+            bool hasVertexNormals,
+            in CompiledAttributeAccessor<float3> vertexNormals,
+            bool hasPointNormals,
+            in CompiledAttributeAccessor<float3> pointNormals,
+            bool hasVertexUv0,
+            in CompiledAttributeAccessor<float2> vertexUv0,
+            int* triangleIndicesPtr,
+            int indexCount)
+        {
             int vertexCount = compiled.VertexCount;
-            int indexCount = triangles.Length;
             bool hasNormals = hasVertexNormals || hasPointNormals;
+            int pointCount = pointPositions.Length;
             IndexFormat indexFormat = vertexCount > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
             var layout = ResolveTriangleVertexLayout(hasNormals, hasVertexUv0);
 
@@ -416,20 +332,17 @@ namespace SangriaMesh
                 if (indexFormat == IndexFormat.UInt32)
                 {
                     var indexData = meshData.GetIndexData<int>();
-                    fixed (int* indexSrc = triangles)
-                    {
-                        UnsafeUtility.MemCpy(
-                            NativeArrayUnsafeUtility.GetUnsafePtr(indexData),
-                            indexSrc,
-                            indexCount * UnsafeUtility.SizeOf<int>());
-                    }
+                    UnsafeUtility.MemCpy(
+                        NativeArrayUnsafeUtility.GetUnsafePtr(indexData),
+                        triangleIndicesPtr,
+                        indexCount * UnsafeUtility.SizeOf<int>());
                 }
                 else
                 {
                     var indexData = meshData.GetIndexData<ushort>();
                     ushort* indexDst = (ushort*)NativeArrayUnsafeUtility.GetUnsafePtr(indexData);
                     for (int i = 0; i < indexCount; i++)
-                        indexDst[i] = (ushort)triangles[i];
+                        indexDst[i] = (ushort)triangleIndicesPtr[i];
                 }
 
                 meshData.subMeshCount = 1;
@@ -671,6 +584,8 @@ namespace SangriaMesh
             return triangleWriteIndex;
         }
 
+        [Conditional("UNITY_ASSERTIONS")]
+        [Conditional("DEVELOPMENT_BUILD")]
         private static void ValidatePrimitiveTriangulationWrite(
             int primitiveVertexCount,
             int primitiveStartWriteIndex,
