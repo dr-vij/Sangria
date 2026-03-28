@@ -125,9 +125,7 @@ public sealed class SangriaMeshSphereExample : MonoBehaviour
     [ContextMenu("Build SangriaMesh Sphere Example")]
     private void BuildSphereExample()
     {
-        NativeDetail detail;
-        CreateSphereWithPrecomputedNormalsAndUv(out detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.TempJob);
-
+        CreateSphereWithPrecomputedNormalsAndUv(out var detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.TempJob);
         try
         {
             NativeCompiledDetail compiled = detail.Compile(Allocator.TempJob);
@@ -162,7 +160,7 @@ public sealed class SangriaMeshSphereExample : MonoBehaviour
                 return;
             }
 
-            CreateSphereWithPrecomputedNormalsAndUv(out var detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments, Allocator.TempJob);
+            CreateSphereWithPrecomputedNormalsAndUv(out var detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments);
 
             try
             {

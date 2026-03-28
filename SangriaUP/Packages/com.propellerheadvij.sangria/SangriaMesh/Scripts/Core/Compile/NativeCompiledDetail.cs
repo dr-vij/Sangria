@@ -67,7 +67,33 @@ namespace SangriaMesh
             m_IsDisposed = false;
         }
 
-        public CoreResult TryGetAttributeAccessor<T>(MeshDomain domain, int attributeId, out CompiledAttributeAccessor<T> accessor)
+        public readonly NativeArray<CompiledAttributeDescriptor>.ReadOnly GetAttributeDescriptors(MeshDomain domain)
+        {
+            ThrowIfDisposed();
+            return domain switch
+            {
+                MeshDomain.Point => m_PointAttributes.GetDescriptors(),
+                MeshDomain.Vertex => m_VertexAttributes.GetDescriptors(),
+                MeshDomain.Primitive => m_PrimitiveAttributes.GetDescriptors(),
+                _ => throw new ArgumentOutOfRangeException(nameof(domain))
+            };
+        }
+
+        public readonly CoreResult TryGetRawAttributeAccessor(MeshDomain domain, int attributeId, out CompiledAttributeRawAccessor accessor)
+        {
+            accessor = default;
+            ThrowIfDisposed();
+
+            return domain switch
+            {
+                MeshDomain.Point => m_PointAttributes.TryGetRawAccessor(attributeId, out accessor),
+                MeshDomain.Vertex => m_VertexAttributes.TryGetRawAccessor(attributeId, out accessor),
+                MeshDomain.Primitive => m_PrimitiveAttributes.TryGetRawAccessor(attributeId, out accessor),
+                _ => CoreResult.InvalidOperation
+            };
+        }
+
+        public readonly CoreResult TryGetAttributeAccessor<T>(MeshDomain domain, int attributeId, out CompiledAttributeAccessor<T> accessor)
             where T : unmanaged
         {
             accessor = default;
@@ -82,7 +108,7 @@ namespace SangriaMesh
             };
         }
 
-        public CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
+        public readonly CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
         {
             ThrowIfDisposed();
             return m_Resources.TryGetResource(resourceId, out value);

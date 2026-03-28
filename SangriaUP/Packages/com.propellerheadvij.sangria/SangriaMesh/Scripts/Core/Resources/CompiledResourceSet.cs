@@ -13,9 +13,9 @@ namespace SangriaMesh
         private NativeParallelHashMap<int, int> m_IdToDescriptor;
         private NativeArray<byte> m_Data;
 
-        public int Count => m_Descriptors.IsCreated ? m_Descriptors.Length : 0;
-        public bool IsCreated => !m_IsDisposed && m_Descriptors.IsCreated;
-        public bool IsDisposed => m_IsDisposed;
+        public readonly int Count => m_Descriptors.IsCreated ? m_Descriptors.Length : 0;
+        public readonly bool IsCreated => !m_IsDisposed && m_Descriptors.IsCreated;
+        public readonly bool IsDisposed => m_IsDisposed;
 
         public CompiledResourceSet(
             NativeArray<CompiledResourceDescriptor> descriptors,
@@ -28,7 +28,7 @@ namespace SangriaMesh
             m_IsDisposed = false;
         }
 
-        public bool TryGetDescriptor(int resourceId, out CompiledResourceDescriptor descriptor)
+        public readonly bool TryGetDescriptor(int resourceId, out CompiledResourceDescriptor descriptor)
         {
             descriptor = default;
             ThrowIfDisposed();
@@ -42,7 +42,7 @@ namespace SangriaMesh
             return true;
         }
 
-        public unsafe CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
+        public readonly unsafe CoreResult TryGetResource<T>(int resourceId, out T value) where T : unmanaged
         {
             value = default;
             ThrowIfDisposed();
@@ -54,7 +54,7 @@ namespace SangriaMesh
             if (descriptor.TypeHash != typeHash)
                 return CoreResult.TypeMismatch;
 
-            value = UnsafeUtility.ReadArrayElement<T>((byte*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(m_Data) + descriptor.OffsetBytes, 0);
+            value = UnsafeUtility.ReadArrayElement<T>((byte*)m_Data.GetUnsafeReadOnlyPtr() + descriptor.OffsetBytes, 0);
             return CoreResult.Success;
         }
 
@@ -76,7 +76,7 @@ namespace SangriaMesh
             m_Data = default;
         }
 
-        private void ThrowIfDisposed()
+        private readonly void ThrowIfDisposed()
         {
             if (m_IsDisposed)
                 throw new ObjectDisposedException(nameof(CompiledResourceSet));

@@ -13,9 +13,9 @@ namespace SangriaMesh
         private NativeParallelHashMap<int, int> m_IdToDescriptor;
         private NativeArray<byte> m_Data;
 
-        public int Count => m_Descriptors.IsCreated ? m_Descriptors.Length : 0;
-        public bool IsCreated => !m_IsDisposed && m_Descriptors.IsCreated;
-        public bool IsDisposed => m_IsDisposed;
+        public readonly int Count => m_Descriptors.IsCreated ? m_Descriptors.Length : 0;
+        public readonly bool IsCreated => !m_IsDisposed && m_Descriptors.IsCreated;
+        public readonly bool IsDisposed => m_IsDisposed;
 
         public CompiledAttributeSet(
             NativeArray<CompiledAttributeDescriptor> descriptors,
@@ -28,7 +28,7 @@ namespace SangriaMesh
             m_IsDisposed = false;
         }
 
-        public bool TryGetDescriptor(int attributeId, out CompiledAttributeDescriptor descriptor)
+        public readonly bool TryGetDescriptor(int attributeId, out CompiledAttributeDescriptor descriptor)
         {
             descriptor = default;
             ThrowIfDisposed();
@@ -42,7 +42,20 @@ namespace SangriaMesh
             return true;
         }
 
-        public unsafe CoreResult TryGetAccessor<T>(int attributeId, out CompiledAttributeAccessor<T> accessor) where T : unmanaged
+        public readonly unsafe CoreResult TryGetRawAccessor(int attributeId, out CompiledAttributeRawAccessor accessor)
+        {
+            accessor = default;
+            ThrowIfDisposed();
+
+            if (!TryGetDescriptor(attributeId, out var descriptor))
+                return CoreResult.NotFound;
+
+            byte* basePtr = (byte*)NativeArrayUnsafeUtility.GetUnsafePtr(m_Data) + descriptor.OffsetBytes;
+            accessor = new CompiledAttributeRawAccessor(basePtr, descriptor.Stride, descriptor.Count);
+            return CoreResult.Success;
+        }
+
+        public readonly unsafe CoreResult TryGetAccessor<T>(int attributeId, out CompiledAttributeAccessor<T> accessor) where T : unmanaged
         {
             accessor = default;
             ThrowIfDisposed();
@@ -59,13 +72,13 @@ namespace SangriaMesh
             return CoreResult.Success;
         }
 
-        public NativeArray<CompiledAttributeDescriptor>.ReadOnly GetDescriptors()
+        public readonly NativeArray<CompiledAttributeDescriptor>.ReadOnly GetDescriptors()
         {
             ThrowIfDisposed();
             return m_Descriptors.AsReadOnly();
         }
 
-        public NativeArray<byte>.ReadOnly GetRawData()
+        public readonly NativeArray<byte>.ReadOnly GetRawData()
         {
             ThrowIfDisposed();
             return m_Data.AsReadOnly();
@@ -89,7 +102,7 @@ namespace SangriaMesh
             m_Data = default;
         }
 
-        private void ThrowIfDisposed()
+        private readonly void ThrowIfDisposed()
         {
             if (m_IsDisposed)
                 throw new ObjectDisposedException(nameof(CompiledAttributeSet));

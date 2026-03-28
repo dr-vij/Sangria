@@ -12,29 +12,38 @@ namespace SangriaMesh
     public static class SangriaMeshUnityMeshExtensions
     {
         private const float EarClipEpsilon = 1e-6f;
-        private static readonly VertexAttributeDescriptor[] TriangleLayoutPositionOnly =
+
+        private struct AttributeMap
         {
-            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0)
+            public int SangriaId;
+            public VertexAttribute UnityAttr;
+            public VertexAttributeFormat Format;
+            public int Dimension;
+        }
+
+        private static readonly AttributeMap[] SupportedAttributes =
+        {
+            new() { SangriaId = AttributeID.Position, UnityAttr = VertexAttribute.Position, Format = VertexAttributeFormat.Float32, Dimension = 3 },
+            new() { SangriaId = AttributeID.Normal, UnityAttr = VertexAttribute.Normal, Format = VertexAttributeFormat.Float32, Dimension = 3 },
+            new() { SangriaId = AttributeID.Tangent, UnityAttr = VertexAttribute.Tangent, Format = VertexAttributeFormat.Float32, Dimension = 4 },
+            new() { SangriaId = AttributeID.Color, UnityAttr = VertexAttribute.Color, Format = VertexAttributeFormat.Float32, Dimension = 4 },
+            new() { SangriaId = AttributeID.UV0, UnityAttr = VertexAttribute.TexCoord0, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+            new() { SangriaId = AttributeID.UV1, UnityAttr = VertexAttribute.TexCoord1, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+            new() { SangriaId = AttributeID.UV2, UnityAttr = VertexAttribute.TexCoord2, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+            new() { SangriaId = AttributeID.UV3, UnityAttr = VertexAttribute.TexCoord3, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+            new() { SangriaId = AttributeID.UV4, UnityAttr = VertexAttribute.TexCoord4, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+            new() { SangriaId = AttributeID.UV5, UnityAttr = VertexAttribute.TexCoord5, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+            new() { SangriaId = AttributeID.UV6, UnityAttr = VertexAttribute.TexCoord6, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+            new() { SangriaId = AttributeID.UV7, UnityAttr = VertexAttribute.TexCoord7, Format = VertexAttributeFormat.Float32, Dimension = 2 },
         };
 
-        private static readonly VertexAttributeDescriptor[] TriangleLayoutPositionNormal =
+        private unsafe struct ActiveAttribute
         {
-            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0),
-            new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3, 1)
-        };
-
-        private static readonly VertexAttributeDescriptor[] TriangleLayoutPositionUv =
-        {
-            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0),
-            new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2, 1)
-        };
-
-        private static readonly VertexAttributeDescriptor[] TriangleLayoutPositionNormalUv =
-        {
-            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0),
-            new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3, 1),
-            new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2, 2)
-        };
+            public AttributeMap Map;
+            public MeshDomain Domain;
+            public CompiledAttributeRawAccessor Raw;
+            public void* UnityDstPtr;
+        }
 
         private const MeshUpdateFlags TriangleSetSubMeshFlags =
             MeshUpdateFlags.DontRecalculateBounds |
@@ -90,28 +99,11 @@ namespace SangriaMesh
             if (!IsTriangleOnlyTopology(compiled))
                 throw new InvalidOperationException("FillUnityMeshTriangles requires triangle-only topology. Use FillUnityMesh for polygon primitives.");
 
-            if (compiled.TryGetAttributeAccessor<float3>(MeshDomain.Point, AttributeID.Position, out var pointPositions) != CoreResult.Success)
-                throw new InvalidOperationException("Point position attribute is required for mesh conversion.");
-
-            bool hasVertexNormals =
-                compiled.TryGetAttributeAccessor<float3>(MeshDomain.Vertex, AttributeID.Normal, out var vertexNormals) == CoreResult.Success;
-            bool hasPointNormals =
-                compiled.TryGetAttributeAccessor<float3>(MeshDomain.Point, AttributeID.Normal, out var pointNormals) == CoreResult.Success;
-            bool hasVertexUv0 =
-                compiled.TryGetAttributeAccessor<float2>(MeshDomain.Vertex, AttributeID.UV0, out var vertexUv0) == CoreResult.Success;
-
             var primitiveVerticesDense = compiled.GetPrimitiveVerticesDenseArrayUnsafe();
-            int* triangleIndicesPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(primitiveVerticesDense);
+            int* triangleIndicesPtr = (int*)primitiveVerticesDense.GetUnsafeReadOnlyPtr();
             ApplyTriangleMeshData(
                 compiled,
                 mesh,
-                pointPositions,
-                hasVertexNormals,
-                vertexNormals,
-                hasPointNormals,
-                pointNormals,
-                hasVertexUv0,
-                vertexUv0,
                 triangleIndicesPtr,
                 primitiveVerticesDense.Length);
         }
@@ -135,12 +127,6 @@ namespace SangriaMesh
             if (compiled.TryGetAttributeAccessor<float3>(MeshDomain.Point, AttributeID.Position, out var pointPositions) != CoreResult.Success)
                 throw new InvalidOperationException("Point position attribute is required for mesh conversion.");
 
-            bool hasVertexNormals =
-                compiled.TryGetAttributeAccessor<float3>(MeshDomain.Vertex, AttributeID.Normal, out var vertexNormals) == CoreResult.Success;
-            bool hasPointNormals =
-                compiled.TryGetAttributeAccessor<float3>(MeshDomain.Point, AttributeID.Normal, out var pointNormals) == CoreResult.Success;
-            bool hasVertexUv0 =
-                compiled.TryGetAttributeAccessor<float2>(MeshDomain.Vertex, AttributeID.UV0, out var vertexUv0) == CoreResult.Success;
             int pointCount = pointPositions.Length;
 
             int triangleIndexCount = 0;
@@ -154,106 +140,109 @@ namespace SangriaMesh
                     triangleIndexCount += (primitiveVertexCount - 2) * 3;
             }
 
-            int[] triangles = new int[triangleIndexCount];
+            var triangles = new NativeArray<int>(triangleIndexCount, Allocator.Temp);
             int triangleWriteIndex = 0;
-            var primitiveVertices = new List<int>(16);
-            var primitivePositions = new List<float3>(16);
-            var projectedPolygon = new List<float2>(16);
-            var polygonOrder = new List<int>(16);
 
-            for (int primitiveIndex = 0; primitiveIndex < compiled.PrimitiveCount; primitiveIndex++)
+            var primitiveVertices = new NativeList<int>(16, Allocator.Temp);
+            var primitivePositions = new NativeList<float3>(16, Allocator.Temp);
+            var projectedPolygon = new NativeList<float2>(16, Allocator.Temp);
+            var polygonOrder = new NativeList<int>(16, Allocator.Temp);
+
+            try
             {
-                int start = compiled.PrimitiveOffsetsDense[primitiveIndex];
-                int end = compiled.PrimitiveOffsetsDense[primitiveIndex + 1];
-                int primitiveVertexCount = end - start;
-
-                if (primitiveVertexCount < 3)
-                    continue;
-
-                if (primitiveVertexCount == 3)
+                for (int primitiveIndex = 0; primitiveIndex < compiled.PrimitiveCount; primitiveIndex++)
                 {
-                    triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start];
-                    triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start + 1];
-                    triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start + 2];
-                    continue;
-                }
+                    int start = compiled.PrimitiveOffsetsDense[primitiveIndex];
+                    int end = compiled.PrimitiveOffsetsDense[primitiveIndex + 1];
+                    int primitiveVertexCount = end - start;
 
-                primitiveVertices.Clear();
-                primitivePositions.Clear();
-                int primitiveStartWriteIndex = triangleWriteIndex;
+                    if (primitiveVertexCount < 3)
+                        continue;
 
-                bool hasInvalidPoint = false;
-                for (int i = 0; i < primitiveVertexCount; i++)
-                {
-                    int vertexIndex = compiled.PrimitiveVerticesDense[start + i];
-                    primitiveVertices.Add(vertexIndex);
-
-                    int pointIndex = compiled.VertexToPointDense[vertexIndex];
-                    if ((uint)pointIndex < (uint)pointCount)
+                    if (primitiveVertexCount == 3)
                     {
-                        primitivePositions.Add(pointPositions[pointIndex]);
+                        triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start];
+                        triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start + 1];
+                        triangles[triangleWriteIndex++] = compiled.PrimitiveVerticesDense[start + 2];
+                        continue;
                     }
-                    else
-                    {
-                        hasInvalidPoint = true;
-                        primitivePositions.Add(default);
-                    }
-                }
 
-                if (hasInvalidPoint || !TryBuildProjectedPolygon(primitivePositions, projectedPolygon))
-                {
-                    triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, primitiveStartWriteIndex);
+                    primitiveVertices.Clear();
+                    primitivePositions.Clear();
+                    int primitiveStartWriteIndex = triangleWriteIndex;
+
+                    bool hasInvalidPoint = false;
+                    for (int i = 0; i < primitiveVertexCount; i++)
+                    {
+                        int vertexIndex = compiled.PrimitiveVerticesDense[start + i];
+                        primitiveVertices.Add(vertexIndex);
+
+                        int pointIndex = compiled.VertexToPointDense[vertexIndex];
+                        if ((uint)pointIndex < (uint)pointCount)
+                        {
+                            primitivePositions.Add(pointPositions[pointIndex]);
+                        }
+                        else
+                        {
+                            hasInvalidPoint = true;
+                            primitivePositions.Add(default);
+                        }
+                    }
+
+                    if (hasInvalidPoint || !TryBuildProjectedPolygon(primitivePositions, projectedPolygon))
+                    {
+                        triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, primitiveStartWriteIndex);
+                        ValidatePrimitiveTriangulationWrite(
+                            primitiveVertexCount,
+                            primitiveStartWriteIndex,
+                            triangleWriteIndex);
+                        continue;
+                    }
+
+                    if (!TryTriangulateEarClip(primitiveVertices, projectedPolygon, polygonOrder, triangles, ref triangleWriteIndex))
+                        triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, primitiveStartWriteIndex);
+
                     ValidatePrimitiveTriangulationWrite(
                         primitiveVertexCount,
                         primitiveStartWriteIndex,
                         triangleWriteIndex);
-                    continue;
                 }
 
-                if (!TryTriangulateEarClip(primitiveVertices, projectedPolygon, polygonOrder, triangles, ref triangleWriteIndex))
-                    triangleWriteIndex = WriteFanTriangulation(primitiveVertices, triangles, primitiveStartWriteIndex);
-
-                ValidatePrimitiveTriangulationWrite(
-                    primitiveVertexCount,
-                    primitiveStartWriteIndex,
-                    triangleWriteIndex);
-            }
-
-            fixed (int* trianglesPtr = triangles)
-            {
                 ApplyTriangleMeshData(
                     compiled,
                     mesh,
-                    pointPositions,
-                    hasVertexNormals,
-                    vertexNormals,
-                    hasPointNormals,
-                    pointNormals,
-                    hasVertexUv0,
-                    vertexUv0,
-                    trianglesPtr,
+                    (int*)triangles.GetUnsafeReadOnlyPtr(),
                     triangles.Length);
+            }
+            finally
+            {
+                triangles.Dispose();
+                primitiveVertices.Dispose();
+                primitivePositions.Dispose();
+                projectedPolygon.Dispose();
+                polygonOrder.Dispose();
             }
         }
 
         private static unsafe void ApplyTriangleMeshData(
             in NativeCompiledDetail compiled,
             Mesh mesh,
-            in CompiledAttributeAccessor<float3> pointPositions,
-            bool hasVertexNormals,
-            in CompiledAttributeAccessor<float3> vertexNormals,
-            bool hasPointNormals,
-            in CompiledAttributeAccessor<float3> pointNormals,
-            bool hasVertexUv0,
-            in CompiledAttributeAccessor<float2> vertexUv0,
             int* triangleIndicesPtr,
             int indexCount)
         {
+            var activeAttributes = CollectActiveAttributes(compiled);
+            if (activeAttributes.Count == 0)
+                throw new InvalidOperationException("No supported attributes found for mesh conversion. Position is required.");
+
             int vertexCount = compiled.VertexCount;
-            bool hasNormals = hasVertexNormals || hasPointNormals;
-            int pointCount = pointPositions.Length;
             IndexFormat indexFormat = vertexCount > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
-            var layout = ResolveTriangleVertexLayout(hasNormals, hasVertexUv0);
+
+            var layout = new VertexAttributeDescriptor[activeAttributes.Count];
+            for (int i = 0; i < activeAttributes.Count; i++)
+            {
+                var attr = activeAttributes[i];
+                layout[i] = new VertexAttributeDescriptor(attr.Map.UnityAttr, attr.Map.Format, attr.Map.Dimension, stream: i);
+            }
 
             var meshDataArray = Mesh.AllocateWritableMeshData(1);
             bool meshDataApplied = false;
@@ -263,30 +252,18 @@ namespace SangriaMesh
                 meshData.SetVertexBufferParams(vertexCount, layout);
                 meshData.SetIndexBufferParams(indexCount, indexFormat);
 
-                var positionData = meshData.GetVertexData<float3>(0);
-                float3* positionDst = (float3*)NativeArrayUnsafeUtility.GetUnsafePtr(positionData);
-
-                float3* normalDst = null;
-                if (hasNormals)
+                bool hasNormals = false;
+                for (int i = 0; i < activeAttributes.Count; i++)
                 {
-                    var normalData = meshData.GetVertexData<float3>(1);
-                    normalDst = (float3*)NativeArrayUnsafeUtility.GetUnsafePtr(normalData);
-                }
-
-                float2* uvDst = null;
-                if (hasVertexUv0)
-                {
-                    int uvStream = hasNormals ? 2 : 1;
-                    var uvData = meshData.GetVertexData<float2>(uvStream);
-                    uvDst = (float2*)NativeArrayUnsafeUtility.GetUnsafePtr(uvData);
+                    var attr = activeAttributes[i];
+                    attr.UnityDstPtr = meshData.GetVertexData<byte>(i).GetUnsafePtr();
+                    activeAttributes[i] = attr;
+                    if (attr.Map.UnityAttr == VertexAttribute.Normal)
+                        hasNormals = true;
                 }
 
                 var vertexToPointDense = compiled.GetVertexToPointDenseArrayUnsafe();
-                int* vertexToPointPtr = (int*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(vertexToPointDense);
-                float3* pointPositionsPtr = pointPositions.GetBasePointer();
-                float3* pointNormalsPtr = hasPointNormals ? pointNormals.GetBasePointer() : null;
-                float3* vertexNormalsPtr = hasVertexNormals ? vertexNormals.GetBasePointer() : null;
-                float2* vertexUv0Ptr = hasVertexUv0 ? vertexUv0.GetBasePointer() : null;
+                int* vertexToPointPtr = (int*)vertexToPointDense.GetUnsafeReadOnlyPtr();
 
                 float minX = 0f, minY = 0f, minZ = 0f;
                 float maxX = 0f, maxY = 0f, maxZ = 0f;
@@ -295,58 +272,57 @@ namespace SangriaMesh
                 for (int vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
                 {
                     int pointIndex = vertexToPointPtr[vertexIndex];
-                    bool pointIndexValid = (uint)pointIndex < (uint)pointCount;
-                    float3 position = pointIndexValid ? pointPositionsPtr[pointIndex] : default;
-                    positionDst[vertexIndex] = position;
 
-                    if (!hasBounds)
+                    foreach (var attr in activeAttributes)
                     {
-                        minX = maxX = position.x;
-                        minY = maxY = position.y;
-                        minZ = maxZ = position.z;
-                        hasBounds = true;
+                        int srcIndex = attr.Domain == MeshDomain.Vertex ? vertexIndex : pointIndex;
+                        void* src = attr.Raw.GetPointerUnchecked(srcIndex);
+                        void* dst = (byte*)attr.UnityDstPtr + (long)vertexIndex * attr.Raw.Stride;
+                        UnsafeUtility.MemCpy(dst, src, attr.Raw.Stride);
+
+                        if (attr.Map.UnityAttr == VertexAttribute.Position)
+                        {
+                            float3 pos = *(float3*)src;
+                            if (!hasBounds)
+                            {
+                                minX = maxX = pos.x;
+                                minY = maxY = pos.y;
+                                minZ = maxZ = pos.z;
+                                hasBounds = true;
+                            }
+                            else
+                            {
+                                if (pos.x < minX) minX = pos.x;
+                                else if (pos.x > maxX) maxX = pos.x;
+
+                                if (pos.y < minY) minY = pos.y;
+                                else if (pos.y > maxY) maxY = pos.y;
+
+                                if (pos.z < minZ) minZ = pos.z;
+                                else if (pos.z > maxZ) maxZ = pos.z;
+                            }
+                        }
                     }
-                    else
-                    {
-                        if (position.x < minX) minX = position.x;
-                        else if (position.x > maxX) maxX = position.x;
-
-                        if (position.y < minY) minY = position.y;
-                        else if (position.y > maxY) maxY = position.y;
-
-                        if (position.z < minZ) minZ = position.z;
-                        else if (position.z > maxZ) maxZ = position.z;
-                    }
-
-                    if (hasNormals)
-                    {
-                        normalDst[vertexIndex] = hasVertexNormals
-                            ? vertexNormalsPtr[vertexIndex]
-                            : (pointIndexValid ? pointNormalsPtr[pointIndex] : default);
-                    }
-
-                    if (hasVertexUv0)
-                        uvDst[vertexIndex] = vertexUv0Ptr[vertexIndex];
                 }
 
                 if (indexFormat == IndexFormat.UInt32)
                 {
                     var indexData = meshData.GetIndexData<int>();
                     UnsafeUtility.MemCpy(
-                        NativeArrayUnsafeUtility.GetUnsafePtr(indexData),
+                        indexData.GetUnsafePtr(),
                         triangleIndicesPtr,
-                        indexCount * UnsafeUtility.SizeOf<int>());
+                        (long)indexCount * UnsafeUtility.SizeOf<int>());
                 }
                 else
                 {
                     var indexData = meshData.GetIndexData<ushort>();
-                    ushort* indexDst = (ushort*)NativeArrayUnsafeUtility.GetUnsafePtr(indexData);
+                    ushort* indexDst = (ushort*)indexData.GetUnsafePtr();
                     for (int i = 0; i < indexCount; i++)
                         indexDst[i] = (ushort)triangleIndicesPtr[i];
                 }
 
                 meshData.subMeshCount = 1;
-                var subMeshDescriptor = new SubMeshDescriptor(0, indexCount, MeshTopology.Triangles)
+                var subMeshDescriptor = new SubMeshDescriptor(0, indexCount)
                 {
                     bounds = hasBounds
                         ? new Bounds(
@@ -376,13 +352,59 @@ namespace SangriaMesh
             }
         }
 
-        private static VertexAttributeDescriptor[] ResolveTriangleVertexLayout(bool hasNormals, bool hasUv0)
+        private static List<ActiveAttribute> CollectActiveAttributes(in NativeCompiledDetail compiled)
         {
-            if (hasNormals)
-                return hasUv0 ? TriangleLayoutPositionNormalUv : TriangleLayoutPositionNormal;
+            var active = new List<ActiveAttribute>();
+            foreach (var map in SupportedAttributes)
+            {
+                if (compiled.TryGetRawAttributeAccessor(MeshDomain.Vertex, map.SangriaId, out var vRaw) == CoreResult.Success)
+                {
+                    ValidateStride(map, vRaw);
+                    active.Add(new ActiveAttribute { Map = map, Domain = MeshDomain.Vertex, Raw = vRaw });
+                }
+                else if (compiled.TryGetRawAttributeAccessor(MeshDomain.Point, map.SangriaId, out var pRaw) == CoreResult.Success)
+                {
+                    ValidateStride(map, pRaw);
+                    active.Add(new ActiveAttribute { Map = map, Domain = MeshDomain.Point, Raw = pRaw });
+                }
+            }
 
-            return hasUv0 ? TriangleLayoutPositionUv : TriangleLayoutPositionOnly;
+            return active;
         }
+
+        private static void ValidateStride(AttributeMap map, CompiledAttributeRawAccessor raw)
+        {
+            int expectedStride = GetVertexAttributeFormatSize(map.Format) * map.Dimension;
+            if (raw.Stride != expectedStride)
+            {
+                throw new InvalidOperationException(
+                    $"Stride mismatch for attribute {map.UnityAttr}. " +
+                    $"Expected {expectedStride} (Format: {map.Format}, Dim: {map.Dimension}), " +
+                    $"but Sangria provided {raw.Stride}. " +
+                    "TODO: Implement slow path for format conversion.");
+            }
+        }
+
+        private static int GetVertexAttributeFormatSize(VertexAttributeFormat format)
+        {
+            return format switch
+            {
+                VertexAttributeFormat.Float32 => 4,
+                VertexAttributeFormat.Float16 => 2,
+                VertexAttributeFormat.UNorm8 => 1,
+                VertexAttributeFormat.SNorm8 => 1,
+                VertexAttributeFormat.UNorm16 => 2,
+                VertexAttributeFormat.SNorm16 => 2,
+                VertexAttributeFormat.UInt8 => 1,
+                VertexAttributeFormat.SInt8 => 1,
+                VertexAttributeFormat.UInt16 => 2,
+                VertexAttributeFormat.SInt16 => 2,
+                VertexAttributeFormat.UInt32 => 4,
+                VertexAttributeFormat.SInt32 => 4,
+                _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
+            };
+        }
+
 
         private static bool IsTriangleOnlyTopology(in NativeCompiledDetail compiled)
         {
@@ -443,10 +465,10 @@ namespace SangriaMesh
             }
         }
 
-        private static bool TryBuildProjectedPolygon(List<float3> positions, List<float2> projectedPolygon)
+        private static bool TryBuildProjectedPolygon(NativeList<float3> positions, NativeList<float2> projectedPolygon)
         {
             projectedPolygon.Clear();
-            int count = positions.Count;
+            int count = positions.Length;
             if (count < 3)
                 return false;
 
@@ -462,7 +484,7 @@ namespace SangriaMesh
             }
 
             float3 absNormal = math.abs(normal);
-            if (absNormal.x <= EarClipEpsilon && absNormal.y <= EarClipEpsilon && absNormal.z <= EarClipEpsilon)
+            if (absNormal is { x: <= EarClipEpsilon, y: <= EarClipEpsilon, z: <= EarClipEpsilon })
                 return false;
 
             int dropAxis;
@@ -488,14 +510,14 @@ namespace SangriaMesh
         }
 
         private static bool TryTriangulateEarClip(
-            List<int> primitiveVertices,
-            List<float2> projectedPolygon,
-            List<int> polygonOrder,
-            int[] triangles,
+            NativeList<int> primitiveVertices,
+            NativeList<float2> projectedPolygon,
+            NativeList<int> polygonOrder,
+            NativeArray<int> triangles,
             ref int triangleWriteIndex)
         {
             polygonOrder.Clear();
-            int vertexCount = primitiveVertices.Count;
+            int vertexCount = primitiveVertices.Length;
             for (int i = 0; i < vertexCount; i++)
                 polygonOrder.Add(i);
 
@@ -507,10 +529,10 @@ namespace SangriaMesh
             int guard = 0;
             int guardLimit = vertexCount * vertexCount;
 
-            while (polygonOrder.Count > 3 && guard++ < guardLimit)
+            while (polygonOrder.Length > 3 && guard++ < guardLimit)
             {
                 bool earFound = false;
-                int count = polygonOrder.Count;
+                int count = polygonOrder.Length;
 
                 for (int i = 0; i < count; i++)
                 {
@@ -559,7 +581,7 @@ namespace SangriaMesh
                     return false;
             }
 
-            if (polygonOrder.Count != 3)
+            if (polygonOrder.Length != 3)
                 return false;
 
             triangles[triangleWriteIndex++] = primitiveVertices[polygonOrder[0]];
@@ -568,13 +590,13 @@ namespace SangriaMesh
             return true;
         }
 
-        private static int WriteFanTriangulation(List<int> primitiveVertices, int[] triangles, int triangleWriteIndex)
+        private static int WriteFanTriangulation(NativeList<int> primitiveVertices, NativeArray<int> triangles, int triangleWriteIndex)
         {
-            if (primitiveVertices.Count < 3)
+            if (primitiveVertices.Length < 3)
                 return triangleWriteIndex;
 
             int root = primitiveVertices[0];
-            for (int i = 1; i < primitiveVertices.Count - 1; i++)
+            for (int i = 1; i < primitiveVertices.Length - 1; i++)
             {
                 triangles[triangleWriteIndex++] = root;
                 triangles[triangleWriteIndex++] = primitiveVertices[i];
@@ -600,10 +622,10 @@ namespace SangriaMesh
             }
         }
 
-        private static float ComputeSignedArea2(List<float2> points, List<int> order)
+        private static float ComputeSignedArea2(NativeList<float2> points, NativeList<int> order)
         {
             float sum = 0f;
-            int count = order.Count;
+            int count = order.Length;
 
             for (int i = 0; i < count; i++)
             {
