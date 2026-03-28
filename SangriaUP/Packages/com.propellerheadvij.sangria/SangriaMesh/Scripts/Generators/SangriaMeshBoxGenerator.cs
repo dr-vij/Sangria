@@ -8,7 +8,7 @@ namespace SangriaMesh
     {
         private const int BoxPointCount = 8;
         private const int BoxVertexCount = 24;
-        private const int BoxPrimitiveCount = 12;
+        private const int BoxPrimitiveCount = 6;
 
         public static NativeDetail CreateBox(
             float3 size,
@@ -74,8 +74,8 @@ namespace SangriaMesh
             detail.AllocateDenseTopologyUnchecked(
                 pointCount,
                 vertexCount,
-                primitiveCount,
-                prepareTriangleStorage: true,
+                0,
+                prepareTriangleStorage: false,
                 initializeVertexToPoint: false);
 
             Ensure(detail.TryGetPointAccessor<float3>(AttributeID.Position, out var pointPositionAccessor), "Get point position accessor");
@@ -90,7 +90,6 @@ namespace SangriaMesh
                 float3* vertexNormalPtr = vertexNormalAccessor.GetBasePointer();
                 float2* vertexUvPtr = vertexUvAccessor.GetBasePointer();
                 int* vertexToPointPtr = detail.GetVertexToPointPointerUnchecked();
-                int* primitiveDataPtr = detail.GetPrimitiveTriangleDataPointerUnchecked();
 
                 float3 halfSize = size * 0.5f;
 
@@ -107,63 +106,56 @@ namespace SangriaMesh
                     pointNormalPtr[pointIndex] = math.normalize(pointPositionPtr[pointIndex]);
 
                 int vertexCursor = 0;
-                int primitiveCursor = 0;
 
                 // Corners stay shared as points; per-face vertices preserve hard normals and UV seams.
                 WriteFace(
+                    ref detail,
                     ref vertexCursor,
-                    ref primitiveCursor,
                     4, 5, 6, 7,
                     new float3(0f, 0f, 1f),
                     vertexNormalPtr,
                     vertexUvPtr,
-                    vertexToPointPtr,
-                    primitiveDataPtr);
+                    vertexToPointPtr);
                 WriteFace(
+                    ref detail,
                     ref vertexCursor,
-                    ref primitiveCursor,
                     1, 0, 3, 2,
                     new float3(0f, 0f, -1f),
                     vertexNormalPtr,
                     vertexUvPtr,
-                    vertexToPointPtr,
-                    primitiveDataPtr);
+                    vertexToPointPtr);
                 WriteFace(
+                    ref detail,
                     ref vertexCursor,
-                    ref primitiveCursor,
                     0, 4, 7, 3,
                     new float3(-1f, 0f, 0f),
                     vertexNormalPtr,
                     vertexUvPtr,
-                    vertexToPointPtr,
-                    primitiveDataPtr);
+                    vertexToPointPtr);
                 WriteFace(
+                    ref detail,
                     ref vertexCursor,
-                    ref primitiveCursor,
                     5, 1, 2, 6,
                     new float3(1f, 0f, 0f),
                     vertexNormalPtr,
                     vertexUvPtr,
-                    vertexToPointPtr,
-                    primitiveDataPtr);
+                    vertexToPointPtr);
                 WriteFace(
+                    ref detail,
                     ref vertexCursor,
-                    ref primitiveCursor,
                     3, 7, 6, 2,
                     new float3(0f, 1f, 0f),
                     vertexNormalPtr,
                     vertexUvPtr,
-                    vertexToPointPtr,
-                    primitiveDataPtr);
+                    vertexToPointPtr);
                 WriteFace(
+                    ref detail,
                     ref vertexCursor,
-                    ref primitiveCursor,
                     0, 1, 5, 4,
                     new float3(0f, -1f, 0f),
                     vertexNormalPtr,
                     vertexUvPtr,
-                    vertexToPointPtr,
-                    primitiveDataPtr);
+                    vertexToPointPtr);
             }
 
             detail.MarkTopologyAndAttributeChanged();
@@ -180,8 +172,8 @@ namespace SangriaMesh
         }
 
         private static unsafe void WriteFace(
+            ref NativeDetail detail,
             ref int vertexCursor,
-            ref int primitiveCursor,
             int point0,
             int point1,
             int point2,
@@ -189,8 +181,7 @@ namespace SangriaMesh
             float3 normal,
             float3* vertexNormalPtr,
             float2* vertexUvPtr,
-            int* vertexToPointPtr,
-            int* primitiveDataPtr)
+            int* vertexToPointPtr)
         {
             int v0 = vertexCursor++;
             int v1 = vertexCursor++;
@@ -212,16 +203,17 @@ namespace SangriaMesh
             vertexUvPtr[v2] = new float2(1f, 1f);
             vertexUvPtr[v3] = new float2(0f, 1f);
 
-            WriteTriangle(primitiveCursor++, v0, v1, v2, primitiveDataPtr);
-            WriteTriangle(primitiveCursor++, v0, v2, v3, primitiveDataPtr);
-        }
+            var faceVertices = new NativeArray<int>(4, Allocator.Temp);
+            faceVertices[0] = v0;
+            faceVertices[1] = v1;
+            faceVertices[2] = v2;
+            faceVertices[3] = v3;
 
-        private static unsafe void WriteTriangle(int primitiveIndex, int v0, int v1, int v2, int* primitiveDataPtr)
-        {
-            int triStart = primitiveIndex * 3;
-            primitiveDataPtr[triStart] = v0;
-            primitiveDataPtr[triStart + 1] = v1;
-            primitiveDataPtr[triStart + 2] = v2;
+            int primitiveIndex = detail.AddPrimitive(faceVertices);
+            faceVertices.Dispose();
+
+            if (primitiveIndex < 0)
+                throw new InvalidOperationException("Add face primitive failed.");
         }
 
         private static void ValidateInputs(float3 size)

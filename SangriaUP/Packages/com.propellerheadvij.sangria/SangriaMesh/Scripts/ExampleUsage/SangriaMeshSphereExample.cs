@@ -85,7 +85,7 @@ public sealed class SangriaMeshSphereExample : MonoBehaviour
             compileTicks = m_Stopwatch.ElapsedTicks;
 
             m_Stopwatch.Restart();
-            compiled.FillUnityMeshTriangles(m_RuntimeMesh);
+            compiled.FillUnityMesh(m_RuntimeMesh);
             bakeTicks = m_Stopwatch.ElapsedTicks;
 
             if (m_TargetMeshFilter != null && m_TargetMeshFilter.sharedMesh != m_RuntimeMesh)
@@ -206,7 +206,7 @@ public sealed class SangriaMeshSphereExample : MonoBehaviour
             var compiled = detail.Compile(Allocator.TempJob);
             try
             {
-                unityMesh = compiled.ToUnityMeshTriangles("SangriaMeshSphere");
+                unityMesh = compiled.ToUnityMesh("SangriaMeshSphere");
             }
             finally
             {
@@ -311,18 +311,13 @@ public sealed class SangriaMeshSphereExample : MonoBehaviour
 
         int clampedStep = Mathf.Max(1, m_PrimitiveLoopStep);
         int bandIndex = Mathf.Clamp(Mathf.RoundToInt(m_PrimitiveLoopLatitude01 * (bandCount - 1)), 0, bandCount - 1);
-        int bandStart = m_LongitudeSegments + bandIndex * m_LongitudeSegments * 2;
+        int bandStart = m_LongitudeSegments + bandIndex * m_LongitudeSegments;
 
         int removedCount = 0;
         for (int lon = 0; lon < m_LongitudeSegments; lon += clampedStep)
         {
-            int primitiveA = bandStart + lon * 2;
-            int primitiveB = primitiveA + 1;
-
-            if (detail.IsPrimitiveAlive(primitiveA) && detail.RemovePrimitive(primitiveA))
-                removedCount++;
-
-            if (detail.IsPrimitiveAlive(primitiveB) && detail.RemovePrimitive(primitiveB))
+            int primitive = bandStart + lon;
+            if (detail.IsPrimitiveAlive(primitive) && detail.RemovePrimitive(primitive))
                 removedCount++;
         }
 
