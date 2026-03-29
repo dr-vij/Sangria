@@ -15,7 +15,7 @@ namespace SangriaMesh
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public float SurfaceArea()
         {
-            float3 size = math.max(Max - Min, 0f);
+            float3 size = MathExtensions.FastMax(Max - Min, new float3(0f));
             return 2f * (size.x * size.y + size.y * size.z + size.z * size.x);
         }
 
@@ -40,11 +40,16 @@ namespace SangriaMesh
         {
             float3 t0 = (Min - rayOrigin) * invDir;
             float3 t1 = (Max - rayOrigin) * invDir;
-            float3 tmin = math.min(t0, t1);
-            float3 tmax = math.max(t0, t1);
+            float3 tmin = MathExtensions.FastMin(t0, t1);
+            float3 tmax = MathExtensions.FastMax(t0, t1);
 
-            float enter = math.max(tNear, math.max(tmin.x, math.max(tmin.y, tmin.z)));
-            float exit = math.min(tFar, math.min(tmax.x, math.min(tmax.y, tmax.z)));
+            float enter = MathExtensions.FastMax(
+                tNear,
+                MathExtensions.FastMax(tmin.x, MathExtensions.FastMax(tmin.y, tmin.z)));
+
+            float exit = MathExtensions.FastMin(
+                tFar,
+                MathExtensions.FastMin(tmax.x, MathExtensions.FastMin(tmax.y, tmax.z)));
 
             return enter <= exit;
         }
@@ -83,8 +88,8 @@ namespace SangriaMesh
         {
             return new BvhAabb
             {
-                Min = math.min(a.Min, b.Min),
-                Max = math.max(a.Max, b.Max)
+                Min = MathExtensions.FastMin(a.Min, b.Min),
+                Max = MathExtensions.FastMax(a.Max, b.Max)
             };
         }
     }

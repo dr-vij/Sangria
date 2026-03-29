@@ -736,7 +736,7 @@ public class SangriaMeshCoreTests
 
             bool hit = detail.RayHitsPrimitive(
                 primitive,
-                new float3(2.4f, 2.4f, -1f),
+                new float3(2.75f, 2.5f, -1f),
                 new float3(0f, 0f, 1f),
                 10f,
                 ref outPositions,

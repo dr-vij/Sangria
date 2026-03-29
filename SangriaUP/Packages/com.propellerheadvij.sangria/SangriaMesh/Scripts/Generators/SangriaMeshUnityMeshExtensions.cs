@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -19,21 +18,7 @@ namespace SangriaMesh
             public int Dimension;
         }
 
-        private static readonly AttributeMap[] SupportedAttributes =
-        {
-            new() { SangriaId = AttributeID.Position, UnityAttr = VertexAttribute.Position, Format = VertexAttributeFormat.Float32, Dimension = 3 },
-            new() { SangriaId = AttributeID.Normal, UnityAttr = VertexAttribute.Normal, Format = VertexAttributeFormat.Float32, Dimension = 3 },
-            new() { SangriaId = AttributeID.Tangent, UnityAttr = VertexAttribute.Tangent, Format = VertexAttributeFormat.Float32, Dimension = 4 },
-            new() { SangriaId = AttributeID.Color, UnityAttr = VertexAttribute.Color, Format = VertexAttributeFormat.Float32, Dimension = 4 },
-            new() { SangriaId = AttributeID.UV0, UnityAttr = VertexAttribute.TexCoord0, Format = VertexAttributeFormat.Float32, Dimension = 2 },
-            new() { SangriaId = AttributeID.UV1, UnityAttr = VertexAttribute.TexCoord1, Format = VertexAttributeFormat.Float32, Dimension = 2 },
-            new() { SangriaId = AttributeID.UV2, UnityAttr = VertexAttribute.TexCoord2, Format = VertexAttributeFormat.Float32, Dimension = 2 },
-            new() { SangriaId = AttributeID.UV3, UnityAttr = VertexAttribute.TexCoord3, Format = VertexAttributeFormat.Float32, Dimension = 2 },
-            new() { SangriaId = AttributeID.UV4, UnityAttr = VertexAttribute.TexCoord4, Format = VertexAttributeFormat.Float32, Dimension = 2 },
-            new() { SangriaId = AttributeID.UV5, UnityAttr = VertexAttribute.TexCoord5, Format = VertexAttributeFormat.Float32, Dimension = 2 },
-            new() { SangriaId = AttributeID.UV6, UnityAttr = VertexAttribute.TexCoord6, Format = VertexAttributeFormat.Float32, Dimension = 2 },
-            new() { SangriaId = AttributeID.UV7, UnityAttr = VertexAttribute.TexCoord7, Format = VertexAttributeFormat.Float32, Dimension = 2 },
-        };
+        private const int SupportedAttributeCount = 12;
 
         private unsafe struct ActiveAttribute
         {
@@ -41,6 +26,26 @@ namespace SangriaMesh
             public MeshDomain Domain;
             public CompiledAttributeRawAccessor Raw;
             public void* UnityDstPtr;
+        }
+
+        private static AttributeMap GetSupportedAttribute(int index)
+        {
+            return index switch
+            {
+                0 => new AttributeMap { SangriaId = AttributeID.Position, UnityAttr = VertexAttribute.Position, Format = VertexAttributeFormat.Float32, Dimension = 3 },
+                1 => new AttributeMap { SangriaId = AttributeID.Normal, UnityAttr = VertexAttribute.Normal, Format = VertexAttributeFormat.Float32, Dimension = 3 },
+                2 => new AttributeMap { SangriaId = AttributeID.Tangent, UnityAttr = VertexAttribute.Tangent, Format = VertexAttributeFormat.Float32, Dimension = 4 },
+                3 => new AttributeMap { SangriaId = AttributeID.Color, UnityAttr = VertexAttribute.Color, Format = VertexAttributeFormat.Float32, Dimension = 4 },
+                4 => new AttributeMap { SangriaId = AttributeID.UV0, UnityAttr = VertexAttribute.TexCoord0, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+                5 => new AttributeMap { SangriaId = AttributeID.UV1, UnityAttr = VertexAttribute.TexCoord1, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+                6 => new AttributeMap { SangriaId = AttributeID.UV2, UnityAttr = VertexAttribute.TexCoord2, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+                7 => new AttributeMap { SangriaId = AttributeID.UV3, UnityAttr = VertexAttribute.TexCoord3, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+                8 => new AttributeMap { SangriaId = AttributeID.UV4, UnityAttr = VertexAttribute.TexCoord4, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+                9 => new AttributeMap { SangriaId = AttributeID.UV5, UnityAttr = VertexAttribute.TexCoord5, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+                10 => new AttributeMap { SangriaId = AttributeID.UV6, UnityAttr = VertexAttribute.TexCoord6, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+                11 => new AttributeMap { SangriaId = AttributeID.UV7, UnityAttr = VertexAttribute.TexCoord7, Format = VertexAttributeFormat.Float32, Dimension = 2 },
+                _ => throw new ArgumentOutOfRangeException(nameof(index), index, null)
+            };
         }
 
         private const MeshUpdateFlags TriangleSetSubMeshFlags =
@@ -228,18 +233,19 @@ namespace SangriaMesh
             int* triangleIndicesPtr,
             int indexCount)
         {
-            var activeAttributes = CollectActiveAttributes(compiled);
-            if (activeAttributes.Count == 0)
+            ActiveAttribute* activeAttributes = stackalloc ActiveAttribute[SupportedAttributeCount];
+            int activeAttributeCount = CollectActiveAttributes(compiled, activeAttributes);
+            if (activeAttributeCount == 0)
                 throw new InvalidOperationException("No supported attributes found for mesh conversion. Position is required.");
 
             int vertexCount = compiled.VertexCount;
             IndexFormat indexFormat = vertexCount > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
 
-            var layout = new VertexAttributeDescriptor[activeAttributes.Count];
-            for (int i = 0; i < activeAttributes.Count; i++)
+            VertexAttributeDescriptor* layoutPtr = stackalloc VertexAttributeDescriptor[SupportedAttributeCount];
+            for (int i = 0; i < activeAttributeCount; i++)
             {
                 var attr = activeAttributes[i];
-                layout[i] = new VertexAttributeDescriptor(attr.Map.UnityAttr, attr.Map.Format, attr.Map.Dimension, stream: i);
+                layoutPtr[i] = new VertexAttributeDescriptor(attr.Map.UnityAttr, attr.Map.Format, attr.Map.Dimension, stream: i);
             }
 
             var meshDataArray = Mesh.AllocateWritableMeshData(1);
@@ -247,11 +253,11 @@ namespace SangriaMesh
             try
             {
                 var meshData = meshDataArray[0];
-                meshData.SetVertexBufferParams(vertexCount, layout);
+                SetVertexBufferParamsNoAlloc(ref meshData, vertexCount, layoutPtr, activeAttributeCount);
                 meshData.SetIndexBufferParams(indexCount, indexFormat);
 
                 bool hasNormals = false;
-                for (int i = 0; i < activeAttributes.Count; i++)
+                for (int i = 0; i < activeAttributeCount; i++)
                 {
                     var attr = activeAttributes[i];
                     attr.UnityDstPtr = meshData.GetVertexData<byte>(i).GetUnsafePtr();
@@ -271,8 +277,9 @@ namespace SangriaMesh
                 {
                     int pointIndex = vertexToPointPtr[vertexIndex];
 
-                    foreach (var attr in activeAttributes)
+                    for (int attrIndex = 0; attrIndex < activeAttributeCount; attrIndex++)
                     {
+                        var attr = activeAttributes[attrIndex];
                         int srcIndex = attr.Domain == MeshDomain.Vertex ? vertexIndex : pointIndex;
                         void* src = attr.Raw.GetPointerUnchecked(srcIndex);
                         void* dst = (byte*)attr.UnityDstPtr + (long)vertexIndex * attr.Raw.Stride;
@@ -281,8 +288,8 @@ namespace SangriaMesh
                         if (attr.Map.UnityAttr == VertexAttribute.Position)
                         {
                             float3 pos = *(float3*)src;
-                            minPos = math.min(minPos, pos);
-                            maxPos = math.max(maxPos, pos);
+                            minPos = MathExtensions.FastMin(minPos, pos);
+                            maxPos = MathExtensions.FastMax(maxPos, pos);
                             hasBounds = true;
                         }
                     }
@@ -327,24 +334,41 @@ namespace SangriaMesh
             }
         }
 
-        private static List<ActiveAttribute> CollectActiveAttributes(in NativeCompiledDetail compiled)
+        private static unsafe void SetVertexBufferParamsNoAlloc(
+            ref Mesh.MeshData meshData,
+            int vertexCount,
+            VertexAttributeDescriptor* layoutPtr,
+            int layoutCount)
         {
-            var active = new List<ActiveAttribute>();
-            foreach (var map in SupportedAttributes)
+            var layout = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<VertexAttributeDescriptor>(
+                layoutPtr,
+                layoutCount,
+                Allocator.None);
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref layout, AtomicSafetyHandle.GetTempMemoryHandle());
+#endif
+            meshData.SetVertexBufferParams(vertexCount, layout);
+        }
+
+        private static unsafe int CollectActiveAttributes(in NativeCompiledDetail compiled, ActiveAttribute* activeAttributes)
+        {
+            int count = 0;
+            for (int i = 0; i < SupportedAttributeCount; i++)
             {
+                var map = GetSupportedAttribute(i);
                 if (compiled.TryGetRawAttributeAccessor(MeshDomain.Vertex, map.SangriaId, out var vRaw) == CoreResult.Success)
                 {
                     ValidateStride(map, vRaw);
-                    active.Add(new ActiveAttribute { Map = map, Domain = MeshDomain.Vertex, Raw = vRaw });
+                    activeAttributes[count++] = new ActiveAttribute { Map = map, Domain = MeshDomain.Vertex, Raw = vRaw };
                 }
                 else if (compiled.TryGetRawAttributeAccessor(MeshDomain.Point, map.SangriaId, out var pRaw) == CoreResult.Success)
                 {
                     ValidateStride(map, pRaw);
-                    active.Add(new ActiveAttribute { Map = map, Domain = MeshDomain.Point, Raw = pRaw });
+                    activeAttributes[count++] = new ActiveAttribute { Map = map, Domain = MeshDomain.Point, Raw = pRaw };
                 }
             }
 
-            return active;
+            return count;
         }
 
         private static void ValidateStride(AttributeMap map, CompiledAttributeRawAccessor raw)

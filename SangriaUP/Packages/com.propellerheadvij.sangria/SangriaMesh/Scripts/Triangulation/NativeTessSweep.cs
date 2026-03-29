@@ -307,8 +307,8 @@ namespace SangriaMesh.NativeTess
 
             if (orgUp == orgLo) return false;
 
-            float tMinUp = math.min(s.mesh.vertices[orgUp].t, s.mesh.vertices[dstUp].t);
-            float tMaxLo = math.max(s.mesh.vertices[orgLo].t, s.mesh.vertices[dstLo].t);
+            float tMinUp = MathExtensions.FastMin(s.mesh.vertices[orgUp].t, s.mesh.vertices[dstUp].t);
+            float tMaxLo = MathExtensions.FastMax(s.mesh.vertices[orgLo].t, s.mesh.vertices[dstLo].t);
             if (tMinUp > tMaxLo) return false;
 
             if (Geom.VertLeq(s.mesh.vertices[orgUp], s.mesh.vertices[orgLo]))

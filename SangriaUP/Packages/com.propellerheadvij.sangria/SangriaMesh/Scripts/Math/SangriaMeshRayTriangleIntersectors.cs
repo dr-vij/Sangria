@@ -106,8 +106,8 @@ namespace SangriaMesh
 
             float uvw = U + V + W;
             float edgeEps = FloatUlp * math.abs(uvw);
-            float minUVW = math.min(U, math.min(V, W));
-            float maxUVW = math.max(U, math.max(V, W));
+            float minUVW = MathExtensions.FastMin(U, MathExtensions.FastMin(V, W));
+            float maxUVW = MathExtensions.FastMax(U, MathExtensions.FastMax(V, W));
             bool edgePass = backfaceCulling
                 ? maxUVW <= edgeEps
                 : (minUVW >= -edgeEps || maxUVW <= edgeEps);
@@ -132,8 +132,8 @@ namespace SangriaMesh
 
             float invUVW = 1f / uvw;
             hit.T = t;
-            hit.U = math.min(U * invUVW, 1f);
-            hit.V = math.min(V * invUVW, 1f);
+            hit.U = MathExtensions.FastMin(U * invUVW, 1f);
+            hit.V = MathExtensions.FastMin(V * invUVW, 1f);
             hit.Determinant = den;
             hit.GeometricNormal = triNg;
             return true;

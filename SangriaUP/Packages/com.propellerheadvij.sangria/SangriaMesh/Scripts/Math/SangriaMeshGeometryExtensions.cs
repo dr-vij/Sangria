@@ -36,8 +36,8 @@ namespace SangriaMesh
 
                 if (i > 0)
                 {
-                    boundsMin = math.min(boundsMin, current);
-                    boundsMax = math.max(boundsMax, current);
+                    boundsMin = MathExtensions.FastMin(boundsMin, current);
+                    boundsMax = MathExtensions.FastMax(boundsMax, current);
                 }
             }
 
@@ -46,7 +46,7 @@ namespace SangriaMesh
                 return false;
 
             float extent = math.cmax(boundsMax - boundsMin);
-            float planeDistanceTolerance = math.max(
+            float planeDistanceTolerance = MathExtensions.FastMax(
                 MinPlaneDistanceTolerance,
                 extent * PlaneDistanceToleranceScale);
 
@@ -63,7 +63,7 @@ namespace SangriaMesh
 
             int droppedAxis = DominantAxis(math.abs(normal));
             float windingSign = 0f;
-            float crossTolerance = math.max(
+            float crossTolerance = MathExtensions.FastMax(
                 MinCrossTolerance,
                 extent * CrossToleranceScale);
 

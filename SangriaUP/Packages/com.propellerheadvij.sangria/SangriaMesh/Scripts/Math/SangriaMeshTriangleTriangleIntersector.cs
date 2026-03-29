@@ -155,7 +155,9 @@ namespace SangriaMesh
             float d0,
             float d1)
         {
-            if (math.min(d0, d1) <= 0f && math.max(d0, d1) >= 0f && math.abs(d0 - d1) > 0f)
+            if (MathExtensions.FastMin(d0, d1) <= 0f &&
+                MathExtensions.FastMax(d0, d1) >= 0f &&
+                math.abs(d0 - d1) > 0f)
             {
                 float t = InterpolateAtPlaneCrossing(p0, p1, d0, d1);
                 if (!hasInterval)
@@ -166,8 +168,8 @@ namespace SangriaMesh
                 }
                 else
                 {
-                    intervalMin = math.min(intervalMin, t);
-                    intervalMax = math.max(intervalMax, t);
+                    intervalMin = MathExtensions.FastMin(intervalMin, t);
+                    intervalMax = MathExtensions.FastMax(intervalMax, t);
                 }
             }
         }
@@ -190,13 +192,13 @@ namespace SangriaMesh
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static float Max3(float a, float b, float c)
         {
-            return math.max(a, math.max(b, c));
+            return MathExtensions.FastMax(a, MathExtensions.FastMax(b, c));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static float Min3(float a, float b, float c)
         {
-            return math.min(a, math.min(b, c));
+            return MathExtensions.FastMin(a, MathExtensions.FastMin(b, c));
         }
     }
 }
