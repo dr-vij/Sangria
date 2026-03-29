@@ -65,6 +65,9 @@ namespace SangriaMesh
             Ensure(detail.TryGetVertexAccessor<float3>(AttributeID.Normal, out var vertexNormalAccessor), "Get vertex normal accessor");
             Ensure(detail.TryGetVertexAccessor<float2>(AttributeID.UV0, out var vertexUvAccessor), "Get vertex uv accessor");
 
+            var primitiveVertices = new NativeArray<int4>(primitiveCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            var primitiveSizes = new NativeArray<byte>(primitiveCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+
             unsafe
             {
                 float3* pointPositionPtr = pointPositionAccessor.GetBasePointer();
@@ -72,43 +75,40 @@ namespace SangriaMesh
                 float3* vertexNormalPtr = vertexNormalAccessor.GetBasePointer();
                 float2* vertexUvPtr = vertexUvAccessor.GetBasePointer();
                 int* vertexToPointPtr = detail.GetVertexToPointPointerUnchecked();
-                InitializePoleData(radius, pointPositionPtr, pointNormalPtr, vertexNormalPtr, vertexUvPtr, vertexToPointPtr);
+                InitializePolePoints(radius, pointPositionPtr, pointNormalPtr);
 
-                var ringJob = new SphereInteriorRingBuildJob
+                var ringPointJob = new SphereInteriorRingPointBuildJob
                 {
                     Radius = radius,
                     LongitudeSegments = longitudeSegments,
                     LatitudeSegments = latitudeSegments,
-                    RingVertexStride = longitudeSegments + 1,
                     PointPositionPtr = pointPositionPtr,
-                    PointNormalPtr = pointNormalPtr,
-                    VertexNormalPtr = vertexNormalPtr,
-                    VertexUvPtr = vertexUvPtr,
-                    VertexToPointPtr = vertexToPointPtr
+                    PointNormalPtr = pointNormalPtr
                 };
 
                 if (ShouldUseParallelBuild(interiorRingCount, primitiveCount))
-                    ringJob.Schedule(interiorRingCount, 1).Complete();
+                    ringPointJob.Schedule(interiorRingCount, 1).Complete();
                 else
-                    ringJob.Run(interiorRingCount);
+                    ringPointJob.Run(interiorRingCount);
+
+                var vertexBuildJob = new SpherePrimitiveVertexBuildJob
+                {
+                    LongitudeSegments = longitudeSegments,
+                    InteriorRingCount = interiorRingCount,
+                    LatitudeSegments = latitudeSegments,
+                    PointNormalPtr = pointNormalPtr,
+                    VertexNormalPtr = vertexNormalPtr,
+                    VertexUvPtr = vertexUvPtr,
+                    VertexToPointPtr = vertexToPointPtr,
+                    PrimitiveVertices = primitiveVertices,
+                    PrimitiveSizes = primitiveSizes
+                };
+
+                if (ShouldUseParallelBuild(interiorRingCount, primitiveCount))
+                    vertexBuildJob.Schedule(primitiveCount, 128).Complete();
+                else
+                    vertexBuildJob.Run(primitiveCount);
             }
-
-            var primitiveVertices = new NativeArray<int4>(primitiveCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-            var primitiveSizes = new NativeArray<byte>(primitiveCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-
-            var primitiveBuildJob = new SpherePrimitivePolygonBuildJob
-            {
-                LongitudeSegments = longitudeSegments,
-                InteriorRingCount = interiorRingCount,
-                RingVertexStride = longitudeSegments + 1,
-                PrimitiveVertices = primitiveVertices,
-                PrimitiveSizes = primitiveSizes
-            };
-
-            if (ShouldUseParallelBuild(interiorRingCount, primitiveCount))
-                primitiveBuildJob.Schedule(primitiveCount, 128).Complete();
-            else
-                primitiveBuildJob.Run(primitiveCount);
 
             var triangle = new NativeArray<int>(3, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
             var quad = new NativeArray<int>(4, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
@@ -154,36 +154,103 @@ namespace SangriaMesh
 
             int interiorRingCount = latitudeSegments - 1;
             pointCount = 2 + interiorRingCount * longitudeSegments;
-            vertexCount = 2 + interiorRingCount * (longitudeSegments + 1);
             primitiveCount = longitudeSegments * latitudeSegments;
+            int topCapVertices = longitudeSegments * 3;
+            int middleVertices = (interiorRingCount - 1) * longitudeSegments * 4;
+            int bottomCapVertices = longitudeSegments * 3;
+            vertexCount = topCapVertices + middleVertices + bottomCapVertices;
         }
 
         [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Low, CompileSynchronously = true)]
-        private struct SpherePrimitivePolygonBuildJob : IJobParallelFor
+        private unsafe struct SphereInteriorRingPointBuildJob : IJobParallelFor
+        {
+            public float Radius;
+            public int LongitudeSegments;
+            public int LatitudeSegments;
+
+            [NativeDisableUnsafePtrRestriction] public float3* PointPositionPtr;
+            [NativeDisableUnsafePtrRestriction] public float3* PointNormalPtr;
+
+            public void Execute(int ring)
+            {
+                float v = (float)(ring + 1) / LatitudeSegments;
+                float phi = v * math.PI;
+                math.sincos(phi, out float sinPhi, out float cosPhi);
+
+                int pointRingStart = 2 + ring * LongitudeSegments;
+                float deltaTheta = 2f * math.PI / LongitudeSegments;
+                math.sincos(deltaTheta, out float sinDelta, out float cosDelta);
+
+                float s = 0f;
+                float c = 1f;
+
+                for (int lon = 0; lon < LongitudeSegments; lon++)
+                {
+                    int pointIndex = pointRingStart + lon;
+                    float3 normal = new float3(c * sinPhi, cosPhi, s * sinPhi);
+                    PointPositionPtr[pointIndex] = normal * Radius;
+                    PointNormalPtr[pointIndex] = normal;
+
+                    float nextS = s * cosDelta + c * sinDelta;
+                    float nextC = c * cosDelta - s * sinDelta;
+                    s = nextS;
+                    c = nextC;
+                }
+            }
+        }
+
+        [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Low, CompileSynchronously = true)]
+        private unsafe struct SpherePrimitiveVertexBuildJob : IJobParallelFor
         {
             public int LongitudeSegments;
             public int InteriorRingCount;
-            public int RingVertexStride;
+            public int LatitudeSegments;
+
+            [NativeDisableUnsafePtrRestriction] [ReadOnly] public float3* PointNormalPtr;
+            [NativeDisableUnsafePtrRestriction] public float3* VertexNormalPtr;
+            [NativeDisableUnsafePtrRestriction] public float2* VertexUvPtr;
+            [NativeDisableUnsafePtrRestriction] public int* VertexToPointPtr;
 
             public NativeArray<int4> PrimitiveVertices;
             public NativeArray<byte> PrimitiveSizes;
 
             public void Execute(int primitiveIndex)
             {
-                const int northPoleVertex = 0;
-                const int southPoleVertex = 1;
+                const int northPolePoint = 0;
+                const int southPolePoint = 1;
 
                 int topCount = LongitudeSegments;
                 int middleCount = (InteriorRingCount - 1) * LongitudeSegments;
                 int middleStart = topCount;
                 int middleEnd = middleStart + middleCount;
+                int topVertexTotal = topCount * 3;
+                int middleVertexTotal = middleCount * 4;
+                float invLon = 1f / LongitudeSegments;
 
                 if (primitiveIndex < topCount)
                 {
                     int lon = primitiveIndex;
-                    int current = 2 + lon;
-                    int next = current + 1;
-                    PrimitiveVertices[primitiveIndex] = new int4(northPoleVertex, next, current, 0);
+                    int nextLon = (lon + 1) % LongitudeSegments;
+                    int vBase = lon * 3;
+
+                    int pointCurrent = 2 + lon;
+                    int pointNext = 2 + nextLon;
+
+                    float v = 1f / LatitudeSegments;
+
+                    VertexToPointPtr[vBase] = northPolePoint;
+                    VertexNormalPtr[vBase] = PointNormalPtr[northPolePoint];
+                    VertexUvPtr[vBase] = new float2((lon + 0.5f) * invLon, 0f);
+
+                    VertexToPointPtr[vBase + 1] = pointNext;
+                    VertexNormalPtr[vBase + 1] = PointNormalPtr[pointNext];
+                    VertexUvPtr[vBase + 1] = new float2((lon + 1) * invLon, v);
+
+                    VertexToPointPtr[vBase + 2] = pointCurrent;
+                    VertexNormalPtr[vBase + 2] = PointNormalPtr[pointCurrent];
+                    VertexUvPtr[vBase + 2] = new float2(lon * invLon, v);
+
+                    PrimitiveVertices[primitiveIndex] = new int4(vBase, vBase + 1, vBase + 2, 0);
                     PrimitiveSizes[primitiveIndex] = 3;
                     return;
                 }
@@ -193,80 +260,67 @@ namespace SangriaMesh
                     int local = primitiveIndex - middleStart;
                     int ring = local / LongitudeSegments;
                     int lon = local - ring * LongitudeSegments;
+                    int nextLon = (lon + 1) % LongitudeSegments;
+                    int vBase = topVertexTotal + local * 4;
 
-                    int ringStart = 2 + ring * RingVertexStride;
-                    int nextRingStart = ringStart + RingVertexStride;
-                    int a = ringStart + lon;
-                    int b = a + 1;
-                    int c = nextRingStart + lon;
-                    int d = c + 1;
+                    int ringPointStart = 2 + ring * LongitudeSegments;
+                    int nextRingPointStart = 2 + (ring + 1) * LongitudeSegments;
 
-                    PrimitiveVertices[primitiveIndex] = new int4(a, b, d, c);
+                    int pA = ringPointStart + lon;
+                    int pB = ringPointStart + nextLon;
+                    int pC = nextRingPointStart + nextLon;
+                    int pD = nextRingPointStart + lon;
+
+                    float vTop = (float)(ring + 1) / LatitudeSegments;
+                    float vBot = (float)(ring + 2) / LatitudeSegments;
+                    float uLeft = lon * invLon;
+                    float uRight = (lon + 1) * invLon;
+
+                    VertexToPointPtr[vBase] = pA;
+                    VertexNormalPtr[vBase] = PointNormalPtr[pA];
+                    VertexUvPtr[vBase] = new float2(uLeft, vTop);
+
+                    VertexToPointPtr[vBase + 1] = pB;
+                    VertexNormalPtr[vBase + 1] = PointNormalPtr[pB];
+                    VertexUvPtr[vBase + 1] = new float2(uRight, vTop);
+
+                    VertexToPointPtr[vBase + 2] = pC;
+                    VertexNormalPtr[vBase + 2] = PointNormalPtr[pC];
+                    VertexUvPtr[vBase + 2] = new float2(uRight, vBot);
+
+                    VertexToPointPtr[vBase + 3] = pD;
+                    VertexNormalPtr[vBase + 3] = PointNormalPtr[pD];
+                    VertexUvPtr[vBase + 3] = new float2(uLeft, vBot);
+
+                    PrimitiveVertices[primitiveIndex] = new int4(vBase, vBase + 1, vBase + 2, vBase + 3);
                     PrimitiveSizes[primitiveIndex] = 4;
                     return;
                 }
 
-                int bottomLon = primitiveIndex - middleEnd;
-                int lastRingStart = 2 + (InteriorRingCount - 1) * RingVertexStride;
-                int currentBottom = lastRingStart + bottomLon;
-                int nextBottom = currentBottom + 1;
-                PrimitiveVertices[primitiveIndex] = new int4(southPoleVertex, currentBottom, nextBottom, 0);
+                int bLon = primitiveIndex - middleEnd;
+                int bNextLon = (bLon + 1) % LongitudeSegments;
+                int bBase = topVertexTotal + middleVertexTotal + bLon * 3;
+
+                int lastRingPointStart = 2 + (InteriorRingCount - 1) * LongitudeSegments;
+                int pCurBot = lastRingPointStart + bLon;
+                int pNxtBot = lastRingPointStart + bNextLon;
+
+                float vLast = (float)(LatitudeSegments - 1) / LatitudeSegments;
+
+                VertexToPointPtr[bBase] = southPolePoint;
+                VertexNormalPtr[bBase] = PointNormalPtr[southPolePoint];
+                VertexUvPtr[bBase] = new float2((bLon + 0.5f) * invLon, 1f);
+
+                VertexToPointPtr[bBase + 1] = pCurBot;
+                VertexNormalPtr[bBase + 1] = PointNormalPtr[pCurBot];
+                VertexUvPtr[bBase + 1] = new float2(bLon * invLon, vLast);
+
+                VertexToPointPtr[bBase + 2] = pNxtBot;
+                VertexNormalPtr[bBase + 2] = PointNormalPtr[pNxtBot];
+                VertexUvPtr[bBase + 2] = new float2((bLon + 1) * invLon, vLast);
+
+                PrimitiveVertices[primitiveIndex] = new int4(bBase, bBase + 1, bBase + 2, 0);
                 PrimitiveSizes[primitiveIndex] = 3;
-            }
-        }
-
-        [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Low, CompileSynchronously = true)]
-        private unsafe struct SphereInteriorRingBuildJob : IJobParallelFor
-        {
-            public float Radius;
-            public int LongitudeSegments;
-            public int LatitudeSegments;
-            public int RingVertexStride;
-
-            [NativeDisableUnsafePtrRestriction] public float3* PointPositionPtr;
-            [NativeDisableUnsafePtrRestriction] public float3* PointNormalPtr;
-            [NativeDisableUnsafePtrRestriction] public float3* VertexNormalPtr;
-            [NativeDisableUnsafePtrRestriction] public float2* VertexUvPtr;
-            [NativeDisableUnsafePtrRestriction] public int* VertexToPointPtr;
-
-            public void Execute(int ring)
-            {
-                float v = (float)(ring + 1) / LatitudeSegments;
-                float phi = v * math.PI;
-                math.sincos(phi, out float sinPhi, out float cosPhi);
-
-                int pointRingStart = 2 + ring * LongitudeSegments;
-                int vertexRingStart = 2 + ring * RingVertexStride;
-                float invLongitude = 1f / LongitudeSegments;
-                float deltaTheta = 2f * math.PI * invLongitude;
-                math.sincos(deltaTheta, out float sinDelta, out float cosDelta);
-
-                float s = 0f;
-                float c = 1f;
-
-                for (int lon = 0; lon < LongitudeSegments; lon++)
-                {
-                    int pointIndex = pointRingStart + lon;
-                    int vertexIndex = vertexRingStart + lon;
-
-                    float3 normal = new float3(c * sinPhi, cosPhi, s * sinPhi);
-                    PointPositionPtr[pointIndex] = normal * Radius;
-                    PointNormalPtr[pointIndex] = normal;
-
-                    VertexToPointPtr[vertexIndex] = pointIndex;
-                    VertexNormalPtr[vertexIndex] = normal;
-                    VertexUvPtr[vertexIndex] = new float2(lon * invLongitude, v);
-
-                    float nextS = s * cosDelta + c * sinDelta;
-                    float nextC = c * cosDelta - s * sinDelta;
-                    s = nextS;
-                    c = nextC;
-                }
-
-                int seamVertexIndex = vertexRingStart + LongitudeSegments;
-                VertexToPointPtr[seamVertexIndex] = pointRingStart;
-                VertexNormalPtr[seamVertexIndex] = PointNormalPtr[pointRingStart];
-                VertexUvPtr[seamVertexIndex] = new float2(1f, v);
             }
         }
 
@@ -288,30 +342,18 @@ namespace SangriaMesh
                 throw new InvalidOperationException("Add primitive failed.");
         }
 
-        private static unsafe void InitializePoleData(
+        private static unsafe void InitializePolePoints(
             float radius,
             float3* pointPositionPtr,
-            float3* pointNormalPtr,
-            float3* vertexNormalPtr,
-            float2* vertexUvPtr,
-            int* vertexToPointPtr)
+            float3* pointNormalPtr)
         {
             const int northPolePoint = 0;
             const int southPolePoint = 1;
-            const int northPoleVertex = 0;
-            const int southPoleVertex = 1;
 
             pointPositionPtr[northPolePoint] = new float3(0f, radius, 0f);
             pointPositionPtr[southPolePoint] = new float3(0f, -radius, 0f);
             pointNormalPtr[northPolePoint] = new float3(0f, 1f, 0f);
             pointNormalPtr[southPolePoint] = new float3(0f, -1f, 0f);
-
-            vertexToPointPtr[northPoleVertex] = northPolePoint;
-            vertexToPointPtr[southPoleVertex] = southPolePoint;
-            vertexNormalPtr[northPoleVertex] = pointNormalPtr[northPolePoint];
-            vertexNormalPtr[southPoleVertex] = pointNormalPtr[southPolePoint];
-            vertexUvPtr[northPoleVertex] = new float2(0.5f, 0f);
-            vertexUvPtr[southPoleVertex] = new float2(0.5f, 1f);
         }
 
         private static void ValidateInputs(float radius, int longitudeSegments, int latitudeSegments)

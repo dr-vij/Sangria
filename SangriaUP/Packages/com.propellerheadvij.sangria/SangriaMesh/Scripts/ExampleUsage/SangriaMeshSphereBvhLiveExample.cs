@@ -76,28 +76,57 @@ public sealed class SangriaMeshSphereBvhLiveExample : MonoBehaviour
         EnsureDetail();
         SangriaMeshSphereGenerator.PopulateUvSphere(ref m_Detail, m_Radius, m_LongitudeSegments, m_LatitudeSegments);
 
-        EnsureVertexColorAttribute();
-        ResetVertexColors();
+        EnsurePrimitiveColorAttribute();
+        ResetPrimitiveColors();
 
         BuildBvhFromPrimitives();
         PerformRaycast();
+        ExpandPrimitiveColorToVertices();
         BakeUnityMesh();
     }
 
-    private void EnsureVertexColorAttribute()
+    private void EnsurePrimitiveColorAttribute()
     {
+        if (!m_Detail.HasPrimitiveAttribute(AttributeID.Color))
+            m_Detail.AddPrimitiveAttribute<float4>(AttributeID.Color);
         if (!m_Detail.HasVertexAttribute(AttributeID.Color))
             m_Detail.AddVertexAttribute<float4>(AttributeID.Color);
     }
 
-    private void ResetVertexColors()
+    private void ResetPrimitiveColors()
     {
-        if (m_Detail.TryGetVertexAccessor<float4>(AttributeID.Color, out var colorAccessor) != CoreResult.Success)
+        if (m_Detail.TryGetPrimitiveAccessor<float4>(AttributeID.Color, out var colorAccessor) != CoreResult.Success)
             return;
 
         float4 white = new float4(1f, 1f, 1f, 1f);
-        for (int v = 0; v < m_Detail.VertexCapacity; v++)
-            colorAccessor[v] = white;
+        for (int p = 0; p < m_Detail.PrimitiveCapacity; p++)
+            colorAccessor[p] = white;
+    }
+
+    private void ExpandPrimitiveColorToVertices()
+    {
+        if (m_Detail.TryGetPrimitiveAccessor<float4>(AttributeID.Color, out var primColor) != CoreResult.Success)
+            return;
+        if (m_Detail.TryGetVertexAccessor<float4>(AttributeID.Color, out var vertColor) != CoreResult.Success)
+            return;
+
+        var validPrimitives = new NativeList<int>(m_Detail.PrimitiveCapacity, Allocator.Temp);
+        try
+        {
+            m_Detail.GetAllValidPrimitives(validPrimitives);
+            for (int i = 0; i < validPrimitives.Length; i++)
+            {
+                int primIdx = validPrimitives[i];
+                float4 color = primColor[primIdx];
+                NativeSlice<int> vertices = m_Detail.GetPrimitiveVertices(primIdx);
+                for (int vi = 0; vi < vertices.Length; vi++)
+                    vertColor[vertices[vi]] = color;
+            }
+        }
+        finally
+        {
+            validPrimitives.Dispose();
+        }
     }
 
     private void BuildBvhFromPrimitives()
@@ -245,7 +274,7 @@ public sealed class SangriaMeshSphereBvhLiveExample : MonoBehaviour
     {
         var elements = m_Bvh.Elements;
 
-        if (m_Detail.TryGetVertexAccessor<float4>(AttributeID.Color, out var colorAccessor) != CoreResult.Success)
+        if (m_Detail.TryGetPrimitiveAccessor<float4>(AttributeID.Color, out var colorAccessor) != CoreResult.Success)
             return;
 
         float4 red = new float4(1f, 0f, 0f, 1f);
@@ -262,7 +291,7 @@ public sealed class SangriaMeshSphereBvhLiveExample : MonoBehaviour
                 if (RayHitsPrimitive(primitiveIndex, rayOrigin, rayDir, tMax, ref outPositions, ref outIndices))
                 {
                     m_RayHitPrimitiveCount++;
-                    PaintPrimitiveVertices(primitiveIndex, red, colorAccessor);
+                    PaintPrimitive(primitiveIndex, red, colorAccessor);
                 }
             }
         }
@@ -331,11 +360,9 @@ public sealed class SangriaMeshSphereBvhLiveExample : MonoBehaviour
         return false;
     }
 
-    private void PaintPrimitiveVertices(int primitiveIndex, float4 color, NativeAttributeAccessor<float4> colorAccessor)
+    private void PaintPrimitive(int primitiveIndex, float4 color, NativeAttributeAccessor<float4> colorAccessor)
     {
-        NativeSlice<int> vertices = m_Detail.GetPrimitiveVertices(primitiveIndex);
-        for (int i = 0; i < vertices.Length; i++)
-            colorAccessor[vertices[i]] = color;
+        colorAccessor[primitiveIndex] = color;
     }
 
     private void BakeUnityMesh()

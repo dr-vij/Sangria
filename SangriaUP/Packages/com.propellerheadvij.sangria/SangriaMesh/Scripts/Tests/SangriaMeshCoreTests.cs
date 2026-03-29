@@ -724,9 +724,10 @@ public class SangriaMeshCoreTests
             var compiled = detail.Compile(Allocator.TempJob);
             try
             {
-                int expectedPoints = 2 + (lat - 1) * lon;
+                int interiorRingCount = lat - 1;
+                int expectedPoints = 2 + interiorRingCount * lon;
                 int expectedPrimitives = lon * lat;
-                int expectedVertices = 2 + (lat - 1) * (lon + 1);
+                int expectedVertices = lon * (2 + 4 * interiorRingCount);
 
                 Assert.AreEqual(expectedPoints, compiled.PointCount);
                 Assert.AreEqual(expectedVertices, compiled.VertexCount);
