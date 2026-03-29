@@ -23,6 +23,10 @@ This separation mirrors the domain model used in professional DCC tools (Houdini
 | **Procedural Generators** | Built-in Box and UV-Sphere generators with Burst-parallel construction |
 | **Unity Mesh Conversion** | Automatic conversion from SangriaMesh to Unity `Mesh` with polygon triangulation (ear-clip + fan fallback) |
 | **Contour Triangulation** | Full sweep-line tessellation engine (LibTess port) with provenance tracking and attribute transfer |
+| **Detail Triangulation** | `NativeDetailTriangulator` converts N-gon detail to triangle-only detail (Fan, EarClipping, Tess modes) with full attribute transfer |
+| **Ray & Triangle Intersectors** | Möller–Trumbore, Plücker, and Woop ray-triangle tests; Möller triangle-triangle intersection |
+| **BVH** | Generic bounding-volume hierarchy (`NativeBvh<T>`) with Build, Refit, and AABB overlap queries |
+| **KD-Tree** | Generic KD-tree (`NativeKdTree<T>`) with nearest-neighbor, k-nearest, and radial search |
 | **Octree** | Native spatial partitioning structure for range queries |
 | **Debug Visualization** | Gizmo-based visualization of points, wireframe, normals, and index labels |
 
@@ -32,18 +36,21 @@ This separation mirrors the domain model used in professional DCC tools (Houdini
 SangriaMesh/
 ├── Scripts/
 │   ├── Core/                    # NativeDetail, attributes, compilation, resources
-│   │   ├── NativeDetail*.cs     # Main geometry container (partial classes)
+│   │   ├── NativeDetail/        # Main geometry container (partial classes)
 │   │   ├── Attributes/          # AttributeStore, NativeAttributeAccessor, CompiledAttributeSet
 │   │   ├── Compile/             # NativeCompiledDetail
+│   │   ├── Contracts/           # CoreResult, MeshDomain, TopologyEditPolicies
+│   │   ├── Handles/             # ElementHandle, SparseHandleSet, AttributeHandle
 │   │   └── Resources/           # ResourceRegistry, CompiledResourceSet
 │   ├── Generators/              # Box, Sphere generators + Unity Mesh extensions
-│   ├── Math/                    # Geometry algorithms (ear-clip triangulation, projection)
-│   ├── Triangulation/           # Sweep-line tessellation engine with provenance
-│   ├── Octree/                  # NativeOctree spatial partitioning
-│   ├── Cutter/                  # MeshCutter (placeholder)
+│   ├── Math/                    # Geometry algorithms, ray-triangle & triangle-triangle intersectors
+│   ├── Triangulation/           # Sweep-line tessellation, NativeDetailTriangulator, attribute transfer
+│   ├── Forest/                  # Spatial data structures
+│   │   ├── BVH/                 # NativeBvh bounding-volume hierarchy
+│   │   ├── KDTree/              # NativeKdTree k-d tree
+│   │   └── Octree/              # NativeOctree spatial partitioning
 │   ├── Debug/                   # DetailVisualizer gizmo drawing
-│   ├── ExampleUsage/            # Box, Sphere, Contour example MonoBehaviours
-│   └── Scripts-legacy/          # Legacy code (not documented)
+│   └── ExampleUsage/            # Box, Sphere, Contour, BVH example MonoBehaviours
 ├── Documentation/               # This documentation
 └── Tests/                       # Unit and integration tests
 ```
@@ -91,8 +98,10 @@ detail.Dispose();
 | [Resources](Resources.md) | Typed resource registry for metadata blobs |
 | [Generators](Generators.md) | Built-in procedural mesh generators (Box, Sphere) |
 | [Unity Mesh Conversion](UnityMeshConversion.md) | Converting SangriaMesh geometry to Unity Mesh |
-| [Geometry & Math](Geometry.md) | Geometry algorithms (triangulation, projection) |
-| [Triangulation](Triangulation.md) | Sweep-line contour tessellation with provenance |
+| [Geometry & Math](Geometry.md) | Geometry algorithms, ray-triangle & triangle-triangle intersectors |
+| [Triangulation](Triangulation.md) | Sweep-line contour tessellation, NativeDetailTriangulator, provenance |
+| [BVH](BVH.md) | Bounding-volume hierarchy for AABB overlap queries |
+| [KDTree](KDTree.md) | KD-tree for nearest-neighbor and radial searches |
 | [Octree](Octree.md) | Native spatial partitioning for range queries |
 | [Debug Visualization](Debug.md) | Gizmo-based geometry visualization tools |
 | [Examples](Examples.md) | Example MonoBehaviours and usage patterns |

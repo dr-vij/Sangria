@@ -4,7 +4,7 @@
 
 `NativeDetail` is the central editable geometry container in SangriaMesh. It stores points, vertices, and primitives with sparse topology (alive flags + free lists) and typed attribute storage.
 
-**Source files**: `NativeDetail.cs`, `NativeDetail.Utility.cs`, `NativeDetail.Compile.cs`, `NativeDetail.Primitive.cs`, `NativeDetail.PointVertex.cs`, `NativeDetail.AttributesResources.cs`
+**Source files**: `NativeDetail.cs`, `NativeDetail.Utility.cs`, `NativeDetail.Compile.cs`, `NativeDetail.Primitive.cs`, `NativeDetail.PointVertex.cs`, `NativeDetail.AttributesResources.cs`, `NativeDetail.BurstJobs.cs`
 
 ## Construction
 
@@ -27,10 +27,18 @@ The `Position` attribute (`float3`) is automatically created on the Point domain
 ### Adding Points
 
 ```csharp
-int pointIndex = detail.AddPoint();  // Returns index of newly allocated point
+int pointIndex = detail.AddPoint(new float3(1, 0, 0));  // Allocate point with position
+int pointIndex2 = detail.AddPoint(pos, out ElementHandle handle);  // Also returns a handle
 ```
 
 Points are allocated from a free list or by extending capacity. The returned index is stable until the point is removed.
+
+### Point Position Access
+
+```csharp
+float3 pos = detail.GetPointPosition(pointIndex);
+bool ok = detail.SetPointPosition(pointIndex, new float3(2, 0, 0));
+```
 
 ### Adding Vertices
 
@@ -56,11 +64,34 @@ quadVerts.Dispose();
 
 Primitives support N-gon topology (any number of vertices ≥ 3).
 
+### Modifying Primitives
+
+```csharp
+// Add a vertex to an existing primitive
+bool added = detail.AddVertexToPrimitive(primitiveIndex, vertexIndex);
+
+// Remove a vertex from a primitive by offset
+bool removed = detail.RemoveVertexFromPrimitive(primitiveIndex, vertexOffset);
+
+// Query vertex count for a primitive
+int count = detail.GetPrimitiveVertexCount(primitiveIndex);
+
+// Compute AABB for a primitive
+bool ok = detail.GetPrimitiveBounds(primitiveIndex, out float3 bMin, out float3 bMax);
+```
+
 ### Removing Elements
 
 ```csharp
 // Remove a point (marks as dead)
 bool removed = detail.RemovePoint(pointIndex);
+
+// Remove a point with policy
+bool removed = detail.RemovePoint(pointIndex, PointDeletePolicy.KeepReferencingVertices);
+
+// Check before removing
+bool canRemove = detail.CanRemovePoint(pointIndex, PointDeletePolicy.KeepReferencingVertices);
+bool canRemove = detail.CanRemoveVertex(vertexIndex, VertexDeletePolicy.RemoveFromIncidentPrimitives);
 
 // Remove a vertex with policy
 bool removed = detail.RemoveVertex(vertexIndex, VertexDeletePolicy.RemoveFromIncidentPrimitives);
@@ -68,6 +99,13 @@ bool removed = detail.RemoveVertex(vertexIndex, VertexDeletePolicy.RemoveFromInc
 // Remove a primitive
 bool removed = detail.RemovePrimitive(primitiveIndex);
 ```
+
+#### Point Delete Policies
+
+| Policy | Behavior |
+|--------|----------|
+| `KeepReferencingVertices` | Only marks the point as dead; vertices still reference the slot. |
+| `RemoveReferencingVertices` | Also removes all vertices that reference this point. |
 
 #### Vertex Delete Policies
 
@@ -98,7 +136,8 @@ bool alive = detail.IsPrimitiveAlive(primitiveIndex);
 int pointIndex = detail.GetVertexPoint(vertexIndex);
 
 // Primitive vertices
-NativeArray<int>.ReadOnly primVerts = detail.GetPrimitiveVertices(primitiveIndex);
+NativeSlice<int> primVerts = detail.GetPrimitiveVertices(primitiveIndex);
+int vertCount = detail.GetPrimitiveVertexCount(primitiveIndex);
 
 // Enumerate all alive elements
 var alivePoints = new NativeList<int>(Allocator.Temp);
@@ -109,6 +148,36 @@ detail.GetAllValidVertices(aliveVertices);
 
 var alivePrimitives = new NativeList<int>(Allocator.Temp);
 detail.GetAllValidPrimitives(alivePrimitives);
+```
+
+### Handle-Based Access
+
+```csharp
+// Get handles for elements
+ElementHandle pointHandle = detail.GetPointHandle(pointIndex);
+ElementHandle vertexHandle = detail.GetVertexHandle(vertexIndex);
+ElementHandle primHandle = detail.GetPrimitiveHandle(primitiveIndex);
+
+// Validate handles (guards against use-after-delete)
+bool valid = detail.IsPointHandleValid(pointHandle);
+bool valid = detail.IsVertexHandleValid(vertexHandle);
+bool valid = detail.IsPrimitiveHandleValid(primHandle);
+```
+
+Handles store both an index and a generation counter, providing safe use-after-delete detection.
+
+### Garbage Collection
+
+Primitive storage may accumulate garbage after vertex removals from primitives. Use `CollectGarbage` to compact:
+
+```csharp
+// Compact primitive storage when garbage exceeds ratio
+bool compacted = detail.CollectGarbage(minGarbageRatio: 0.25f);
+
+// Query garbage state
+int garbageLen = detail.PrimitiveGarbageLength;
+bool hasGarbage = detail.PrimitiveHasGarbage;
+int dataLen = detail.PrimitiveDataLength;
 ```
 
 ## Dense Topology Allocation
@@ -138,9 +207,12 @@ Capacity is preserved; no reallocation occurs.
 
 ```csharp
 detail.MarkTopologyAndAttributeChanged();  // Signals that topology or attributes have changed
+
+uint topoVersion = detail.TopologyVersion;      // Incremented on topology changes
+uint attrVersion = detail.AttributeVersion;     // Incremented on attribute changes
 ```
 
-Used by generators after populating geometry to indicate that downstream consumers (compilation, rendering) should refresh.
+Used by generators after populating geometry to indicate that downstream consumers (compilation, rendering) should refresh. Version counters can be compared to detect whether recompilation is needed.
 
 ## Compilation
 

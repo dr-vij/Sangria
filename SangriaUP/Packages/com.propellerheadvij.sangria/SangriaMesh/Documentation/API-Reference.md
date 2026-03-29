@@ -21,20 +21,36 @@ Central editable geometry container with sparse topology and typed attributes.
 | `PointCapacity` | `int` | Total point slots (including dead) |
 | `VertexCapacity` | `int` | Total vertex slots |
 | `PrimitiveCapacity` | `int` | Total primitive slots |
+| `PrimitiveDataLength` | `int` | Total primitive data length |
+| `PrimitiveGarbageLength` | `int` | Garbage bytes in primitive storage |
+| `PrimitiveHasGarbage` | `bool` | Whether primitive storage has garbage |
+| `TopologyVersion` | `uint` | Incremented on topology changes |
+| `AttributeVersion` | `uint` | Incremented on attribute changes |
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `AddPoint()` | `int` | Allocate a new point, returns index |
+| `AddPoint(float3 position)` | `int` | Allocate a new point with position, returns index |
+| `AddPoint(float3 position, out ElementHandle)` | `int` | Allocate a point, returns index and handle |
 | `AddVertex(int pointIndex)` | `int` | Allocate a vertex referencing a point |
 | `AddPrimitive(NativeArray<int> vertices)` | `int` | Add an N-gon primitive |
+| `GetPointPosition(int pointIndex)` | `float3` | Get point position |
+| `SetPointPosition(int pointIndex, float3 position)` | `bool` | Set point position |
+| `CanRemovePoint(int, PointDeletePolicy, ...)` | `bool` | Check if point can be removed |
 | `RemovePoint(int pointIndex)` | `bool` | Mark point as dead |
+| `RemovePoint(int, PointDeletePolicy, ...)` | `bool` | Remove point with policy |
+| `CanRemoveVertex(int, VertexDeletePolicy, ...)` | `bool` | Check if vertex can be removed |
+| `RemoveVertex(int vertexIndex)` | `bool` | Remove vertex (default policy) |
 | `RemoveVertex(int vertexIndex, VertexDeletePolicy policy)` | `bool` | Remove vertex with policy |
 | `RemovePrimitive(int primitiveIndex)` | `bool` | Remove primitive |
+| `AddVertexToPrimitive(int primitiveIndex, int vertexIndex)` | `bool` | Add vertex to existing primitive |
+| `RemoveVertexFromPrimitive(int primitiveIndex, int offset)` | `bool` | Remove vertex from primitive by offset |
 | `IsPointAlive(int index)` | `bool` | Check if point slot is alive |
 | `IsVertexAlive(int index)` | `bool` | Check if vertex slot is alive |
 | `IsPrimitiveAlive(int index)` | `bool` | Check if primitive slot is alive |
 | `GetVertexPoint(int vertexIndex)` | `int` | Get point index for vertex |
-| `GetPrimitiveVertices(int primitiveIndex)` | `NativeArray<int>.ReadOnly` | Get vertex indices for primitive |
+| `GetPrimitiveVertices(int primitiveIndex)` | `NativeSlice<int>` | Get vertex indices for primitive |
+| `GetPrimitiveVertexCount(int primitiveIndex)` | `int` | Get vertex count for primitive |
+| `GetPrimitiveBounds(int, out float3, out float3)` | `bool` | Compute primitive AABB |
 | `GetAllValidPoints(NativeList<int> output)` | `void` | Enumerate alive point indices |
 | `GetAllValidVertices(NativeList<int> output)` | `void` | Enumerate alive vertex indices |
 | `GetAllValidPrimitives(NativeList<int> output)` | `void` | Enumerate alive primitive indices |
@@ -54,6 +70,13 @@ Central editable geometry container with sparse topology and typed attributes.
 | `TryGetResource<T>(int id, out T value)` | `CoreResult` | Get a typed resource |
 | `ContainsResource(int id)` | `bool` | Check resource existence |
 | `RemoveResource(int id)` | `CoreResult` | Remove a resource |
+| `GetPointHandle(int index)` | `ElementHandle` | Get handle for point |
+| `GetVertexHandle(int index)` | `ElementHandle` | Get handle for vertex |
+| `GetPrimitiveHandle(int index)` | `ElementHandle` | Get handle for primitive |
+| `IsPointHandleValid(ElementHandle)` | `bool` | Validate point handle |
+| `IsVertexHandleValid(ElementHandle)` | `bool` | Validate vertex handle |
+| `IsPrimitiveHandleValid(ElementHandle)` | `bool` | Validate primitive handle |
+| `CollectGarbage(float minGarbageRatio)` | `bool` | Compact primitive storage |
 | `Compile(Allocator allocator)` | `NativeCompiledDetail` | Compile to dense snapshot |
 | `Clear()` | `void` | Reset all elements to dead |
 | `AllocateDenseTopologyUnchecked(...)` | `void` | Bulk allocate contiguous topology |
@@ -132,6 +155,13 @@ Typed read/write accessor for attribute data.
 | `RemoveFromIncidentPrimitives` | Remove vertex from referencing primitives |
 | `RemoveVertexOnly` | Only mark vertex dead |
 
+#### PointDeletePolicy
+
+| Value | Description |
+|-------|-------------|
+| `KeepReferencingVertices` | Only mark point as dead; vertices still reference slot |
+| `RemoveReferencingVertices` | Also remove all vertices referencing this point |
+
 ---
 
 ### AttributeID (static class)
@@ -204,9 +234,49 @@ Typed read/write accessor for attribute data.
 | `PointInTriangleInclusive(float2, float2, float2, float2)` | Point-in-triangle test |
 | `Cross2(float2, float2)` | 2D cross product |
 
+#### SangriaMeshRayTriangleIntersectors (static class)
+
+| Method | Description |
+|--------|-------------|
+| `TryIntersectMoeller(...)` | Möller–Trumbore ray-triangle intersection |
+| `TryIntersectPluecker(...)` | Plücker-coordinate ray-triangle intersection |
+| `TryIntersectWoop(...)` | Woop watertight ray-triangle intersection |
+
+#### RayTriangleHit (struct)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `T` | `float` | Parametric distance along ray |
+| `U` | `float` | Barycentric coordinate |
+| `V` | `float` | Barycentric coordinate |
+| `W` | `float` | 1 − U − V (readonly) |
+| `Determinant` | `float` | Triangle determinant |
+| `GeometricNormal` | `float3` | Unnormalized face normal |
+
+#### SangriaMeshTriangleTriangleIntersector (static class)
+
+| Method | Description |
+|--------|-------------|
+| `Intersects(in float3 a0..a2, in float3 b0..b2, float epsilon)` | Test triangle-triangle intersection |
+
 ---
 
 ### Triangulation
+
+#### NativeDetailTriangulator (static class)
+
+| Method | Description |
+|--------|-------------|
+| `Triangulate(ref NativeDetail src, ref NativeDetail dst, TriangulationMode, InterpolationPolicy, TriangulationOptions)` | Triangulate all N-gons into new detail |
+| `TriangulateInPlace(ref NativeDetail, TriangulationMode, Allocator, InterpolationPolicy, TriangulationOptions)` | Triangulate in-place (swap) |
+
+#### TriangulationMode (enum)
+
+| Value | Description |
+|-------|-------------|
+| `Fan` | Fan from first vertex (convex only) |
+| `EarClipping` | Ear-clipping (concave simple polygons) |
+| `Tess` | Sweep-line tessellation (complex polygons) |
 
 #### Triangulation (static class)
 
@@ -239,6 +309,8 @@ Typed read/write accessor for attribute data.
 | Method | Description |
 |--------|-------------|
 | `TransferPointAttributes(ref NativeDetail src, ref NativeDetail dst, in ProvenanceMap, in InterpolationPolicy)` | Bulk transfer all point attributes |
+| `TransferVertexAttributes(ref NativeDetail src, ref NativeDetail dst, NativeHashMap, in InterpolationPolicy)` | Bulk transfer all vertex attributes |
+| `TransferPrimitiveAttributes(ref NativeDetail src, ref NativeDetail dst, NativeHashMap, in InterpolationPolicy)` | Bulk transfer all primitive attributes |
 | `TransferAttribute<T>(NativeAttributeAccessor<T> src, NativeAttributeAccessor<T> dst, in ProvenanceMap, InterpolationMode)` | Transfer single typed attribute |
 
 ---
@@ -254,6 +326,130 @@ Typed read/write accessor for attribute data.
 | `DrawVertexNormalsGizmos(float length, Color color)` | Draw normal vectors |
 | `DrawPointNumbers(Color color, float offset)` | Draw point index labels (Editor only) |
 | `DrawPrimitiveNumbers(Color color, float offset)` | Draw primitive index labels (Editor only) |
+
+---
+
+### Handles
+
+#### ElementHandle (readonly struct)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Index` | `int` | Slot index |
+| `Generation` | `uint` | Generation counter |
+| `IsValid` | `bool` | True if index ≥ 0 and generation ≠ 0 |
+
+#### AttributeHandle\<T\> (readonly struct)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `AttributeId` | `int` | Attribute identifier |
+| `IsValid` | `bool` | True if column index ≥ 0 |
+
+---
+
+## Namespace: SangriaMesh (Forest)
+
+### BVH
+
+#### NativeBvh\<T\> (struct, IDisposable)
+
+| Constructor | Description |
+|-------------|-------------|
+| `NativeBvh(int initialCapacity, Allocator, int maxLeafSize = 4)` | Create BVH |
+
+| Method | Description |
+|--------|-------------|
+| `Build(NativeArray<BvhElement<T>>)` | Build tree from elements |
+| `Build(NativeList<BvhElement<T>>)` | Build tree from list |
+| `Build(NativeArray<BvhElement<T>>, NativeList<int4>, NativeList<int2>)` | Build with pre-allocated stacks |
+| `Refit()` | Update node bounds bottom-up |
+| `Refit(NativeList<int2>)` | Refit with pre-allocated stack |
+| `Query(BvhAabb, NativeList<int>)` | AABB overlap query (indices) |
+| `Query(BvhAabb, NativeList<int>, NativeList<int>)` | Query with pre-allocated stack |
+| `Query(BvhAabb, NativeList<BvhElement<T>>)` | AABB overlap query (elements) |
+| `Query(BvhAabb, NativeList<BvhElement<T>>, NativeList<int>)` | Query with pre-allocated stack |
+| `TryGetElement(int, out BvhElement<T>)` | Get element by index |
+| `SetElementBounds(int, BvhAabb)` | Update element bounds |
+| `SetElementValue(int, T)` | Update element value |
+| `SetMaxLeafSize(int)` | Set max leaf size |
+| `EnsureCapacity(int)` | Pre-allocate capacity |
+| `Clear()` | Clear all elements |
+| `Dispose()` | Free native memory |
+
+#### BvhAabb (struct)
+
+| Field / Method | Description |
+|----------------|-------------|
+| `Min`, `Max` | AABB bounds |
+| `Center`, `Extents` | Computed properties |
+| `SurfaceArea()` | Compute surface area |
+| `Intersects(BvhAabb)` | AABB-AABB overlap test |
+| `Contains(BvhAabb)`, `Contains(float3)` | Containment tests |
+| `Expanded(float)` | Return expanded AABB |
+| `FromCenterExtents(float3, float3)` | Create from center + extents |
+| `Union(BvhAabb, BvhAabb)` | Merge two AABBs |
+
+#### BvhElement\<T\> (struct)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Bounds` | `BvhAabb` | Element bounding box |
+| `Value` | `T` | User payload |
+
+#### BvhJobs (static class)
+
+| Job | Description |
+|-----|-------------|
+| `RefitJob<T> : IJob` | Burst-compiled refit |
+| `OverlapIndicesJob<T> : IJob` | Burst-compiled index query |
+| `OverlapElementsJob<T> : IJob` | Burst-compiled element query |
+
+---
+
+### KD-Tree
+
+#### NativeKdTree\<T\> (struct, IDisposable)
+
+| Constructor | Description |
+|-------------|-------------|
+| `NativeKdTree(int initialCapacity, Allocator)` | Create KD-tree |
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `IsCreated` | `bool` | Whether allocated |
+| `Count` | `int` | Number of elements |
+| `Points` | `NativeArray<KdElement<T>>` | Sorted point array |
+
+| Method | Description |
+|--------|-------------|
+| `Build(NativeArray<KdElement<T>>)` | Build tree from elements |
+| `Build(NativeArray<KdElement<T>>, NativeList<int3>)` | Build with pre-allocated stack |
+| `Build(NativeList<KdElement<T>>)` | Build from list |
+| `FindNearest(float3)` | Find nearest neighbor index |
+| `FindNearest(float3, NativeList<int3>)` | Find nearest with pre-allocated stack |
+| `FindKNearest(float3, int, NativeList<int>, NativeList<float>)` | K-nearest neighbors |
+| `FindKNearest(float3, int, NativeList<int>, NativeList<float>, NativeList<int3>)` | K-nearest with stack |
+| `RadialSearch(float3, float, NativeList<int>, NativeList<float>)` | All points within radius |
+| `RadialSearch(float3, float, NativeList<int>, NativeList<float>, NativeList<int3>)` | Radial with stack |
+| `Clear()` | Clear all elements |
+| `Dispose()` | Free native memory |
+
+#### KdElement\<T\> (struct)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Position` | `float3` | Point position |
+| `Value` | `T` | User payload |
+
+#### KdTreeJobs (static class)
+
+| Job | Description |
+|-----|-------------|
+| `BuildJob<T> : IJob` | Burst-compiled build |
+| `FindNearestJob<T> : IJob` | Burst-compiled nearest query |
+| `FindKNearestJob<T> : IJob` | Burst-compiled k-nearest query |
+| `RadialSearchJob<T> : IJob` | Burst-compiled radial search |
 
 ---
 

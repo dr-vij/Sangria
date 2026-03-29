@@ -41,7 +41,7 @@ SangriaMesh follows a **Point / Vertex / Primitive** geometry model inspired by 
 ┌──────────────────────────────────────────────────────────┐
 │  Layer 5: Examples & Application Code                     │
 │  SangriaMeshBoxExample, SangriaMeshSphereExample,         │
-│  SangriaMeshContourExample                                │
+│  SangriaMeshContourExample, SangriaMeshSphereBvhLiveExample│
 ├──────────────────────────────────────────────────────────┤
 │  Layer 4: Debug & Visualization                           │
 │  DetailVisualizer (Gizmo drawing for points, wireframe,   │
@@ -54,7 +54,11 @@ SangriaMesh follows a **Point / Vertex / Primitive** geometry model inspired by 
 │  Layer 2: Generators & Operations                         │
 │  SangriaMeshBoxGenerator, SangriaMeshSphereGenerator      │
 │  Triangulation (sweep-line tessellation + provenance)     │
-│  NativeOctree (spatial queries)                           │
+│  NativeDetailTriangulator (N-gon → triangle conversion)   │
+│  NativeBvh (bounding-volume hierarchy)                    │
+│  NativeKdTree (k-d tree nearest-neighbor search)          │
+│  NativeOctree (spatial range queries)                     │
+│  Ray-Triangle & Triangle-Triangle intersectors            │
 │  MeshCutter (planned)                                     │
 ├──────────────────────────────────────────────────────────┤
 │  Layer 1: Compilation Pipeline                            │
@@ -165,6 +169,9 @@ Dispose all native memory
 
 - **Generators**: `SangriaMeshSphereGenerator` uses `IJobParallelFor` with Burst for parallel ring and primitive construction when mesh complexity exceeds thresholds
 - **Triangulation**: Single-threaded sweep-line (inherently sequential algorithm)
+- **NativeDetailTriangulator**: Single-threaded
 - **Attribute Transfer**: Single-threaded (parallelizable in future)
+- **BVH**: Supports Burst-compiled `IJob` for build, refit, and overlap queries
+- **KD-Tree**: Supports Burst-compiled `IJob` for build, nearest, k-nearest, and radial queries
 - **Octree**: Supports Burst-compiled `IJob` for bulk insert and range queries
 - **Unity Mesh Conversion**: Main-thread only (Unity Mesh API constraint)

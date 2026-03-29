@@ -2,9 +2,9 @@
 
 ## Overview
 
-SangriaMesh includes three example MonoBehaviours that demonstrate real-time mesh generation, editing, compilation, and rendering workflows.
+SangriaMesh includes four example MonoBehaviours that demonstrate real-time mesh generation, editing, compilation, spatial indexing, and rendering workflows.
 
-**Source files**: `SangriaMeshBoxExample.cs`, `SangriaMeshSphereExample.cs`, `SangriaMeshContourExample.cs`
+**Source files**: `SangriaMeshBoxExample.cs`, `SangriaMeshSphereExample.cs`, `SangriaMeshContourExample.cs`, `SangriaMeshSphereBvhLiveExample.cs`
 
 ## Box Example
 
@@ -120,6 +120,28 @@ Each direct child represents one closed contour. Each grandchild's local positio
 | `Positive` | Only CCW contours fill; CW contours create holes |
 | `Negative` | Only CW contours fill |
 | `AbsGeqTwo` | Only doubly-overlapping regions fill |
+
+## Sphere BVH Live Example
+
+**Class**: `SangriaMeshSphereBvhLiveExample`
+
+Demonstrates real-time BVH construction from a UV sphere mesh, with depth-colored gizmo visualization of the BVH hierarchy.
+
+### Features
+
+- **Real-time sphere + BVH pipeline**: Generates a UV sphere, builds per-primitive bounding boxes, and constructs a `NativeBvh<int>` each frame
+- **BVH gizmo visualization**: Draws internal and leaf node bounds with a depth-based color gradient
+- **Configurable BVH parameters**: Max leaf size, depth-to-draw limit, internal/leaf alpha
+- **Runtime statistics**: Displays primitive count, node count, and leaf count in the Inspector
+
+### Inspector Settings
+
+| Section | Settings |
+|---------|----------|
+| **Sphere** | Radius, Longitude/Latitude Segments, Target MeshFilter |
+| **BVH** | Max Leaf Size |
+| **BVH Gizmos** | Draw BVH, Draw Internal/Leaf Nodes, Max Depth to Draw, Depth Gradient, Internal/Leaf Alpha |
+| **Runtime Info** | Primitive Count, Node Count, Leaf Count (read-only) |
 
 ## Common Patterns Demonstrated
 

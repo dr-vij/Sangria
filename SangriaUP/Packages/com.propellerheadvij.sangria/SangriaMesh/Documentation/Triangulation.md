@@ -1,12 +1,13 @@
-# SangriaMesh — Contour Triangulation
+# SangriaMesh — Triangulation
 
 ## Overview
 
-SangriaMesh includes a full sweep-line contour tessellation engine — a native, Burst-compatible port of LibTessDotNet. It converts 2D contour inputs (including contours with holes, overlapping contours, self-intersections, and degenerate geometry) into indexed triangle meshes stored in `NativeDetail`.
+SangriaMesh provides two triangulation systems:
 
-The engine features a provenance tracking system that records the origin of every output vertex, enabling attribute transfer (UV, color, normals) as a separate, composable operation.
+1. **Contour Tessellation** — a sweep-line engine (LibTess port) that converts 2D contour inputs (including holes, overlapping contours, self-intersections) into indexed triangle meshes with provenance tracking.
+2. **NativeDetailTriangulator** — converts N-gon `NativeDetail` geometry into triangle-only detail, with full attribute transfer across all domains.
 
-**Source files**: `Triangulation.cs`, `NativeTess.cs`, `NativeTessSweep.cs`, `NativeTessMesh.cs`, `NativeTessGeom.cs`, `NativeTessDict.cs`, `NativeTessPQ.cs`, `NativeTessTypes.cs`, `NativeTessState.cs`, `ProvenanceTypes.cs`, `AttributeTransfer.cs`
+**Source files**: `Triangulation.cs`, `NativeTess.cs`, `NativeTessSweep.cs`, `NativeTessMesh.cs`, `NativeTessGeom.cs`, `NativeTessDict.cs`, `NativeTessPQ.cs`, `NativeTessTypes.cs`, `NativeTessState.cs`, `ProvenanceTypes.cs`, `AttributeTransfer.cs`, `NativeDetailTriangulator.cs`
 
 > **Detailed documentation**: See the comprehensive [Triangulation DOCUMENTATION.md](../Scripts/Triangulation/DOCUMENTATION.md) in the Triangulation source directory for full architecture details, provenance system internals, and comparison with industry solutions.
 
@@ -170,9 +171,84 @@ AttributeTransferOp.TransferPointAttributes()
 
 The core tessellator never reads or writes user attributes — provenance is the bridge between topology operations and attribute transfer.
 
+## NativeDetailTriangulator
+
+**Class**: `NativeDetailTriangulator` (static)
+
+Converts all N-gon primitives in a `NativeDetail` into triangles. Triangles (3-vertex primitives) pass through unchanged. All point, vertex, and primitive attributes are transferred.
+
+### TriangulationMode
+
+| Mode | Description |
+|------|-------------|
+| `Fan` | Simple fan from first vertex. Fast, correct only for convex polygons. |
+| `EarClipping` | Ear-clipping algorithm. Handles concave simple polygons. Default. |
+| `Tess` | Full sweep-line tessellation (LibTess). Handles complex/non-planar polygons. Accepts `TriangulationOptions`. |
+
+### Triangulate
+
+Triangulates all primitives from a source detail into a new output detail:
+
+```csharp
+var output = new NativeDetail(source.PointCount, source.VertexCount, source.PrimitiveCount, Allocator.TempJob);
+
+CoreResult result = NativeDetailTriangulator.Triangulate(
+    ref source,
+    ref output,
+    mode: TriangulationMode.EarClipping,
+    policy: InterpolationPolicy.Default,
+    tessOptions: default);
+
+// output now contains only triangle primitives
+output.Dispose();
+```
+
+- `outputDetail` must be a fresh, empty `NativeDetail`.
+- Returns `CoreResult.InvalidOperation` if any primitive has fewer than 3 vertices.
+
+### TriangulateInPlace
+
+Convenience method that triangulates in-place by creating a temporary detail and swapping:
+
+```csharp
+CoreResult result = NativeDetailTriangulator.TriangulateInPlace(
+    ref detail,
+    mode: TriangulationMode.EarClipping,
+    outputAllocator: Allocator.Persistent);
+// detail is now replaced with triangulated version
+```
+
+### Attribute Transfer
+
+All three modes perform full attribute transfer:
+- **Point attributes**: Transferred via provenance (identity mapping for Fan/EarClipping, interpolated for Tess).
+- **Vertex attributes**: Transferred per-corner. For Fan/EarClipping, vertex semantics are preserved 1:1. For Tess, vertex attributes are derived from the source vertices.
+- **Primitive attributes**: Copied from the source primitive to each output triangle generated from it.
+
+## Attribute Transfer API
+
+**Class**: `AttributeTransferOp` (static)
+
+Transfers attributes between details using a `ProvenanceMap` and `InterpolationPolicy`.
+
+```csharp
+// Transfer all point attributes
+AttributeTransferOp.TransferPointAttributes(ref src, ref dst, in provenance, in policy);
+
+// Transfer all vertex attributes
+AttributeTransferOp.TransferVertexAttributes(ref src, ref dst, vertexMap, in policy);
+
+// Transfer all primitive attributes
+AttributeTransferOp.TransferPrimitiveAttributes(ref src, ref dst, primitiveMap, in policy);
+
+// Transfer a single typed attribute
+AttributeTransferOp.TransferAttribute<float3>(srcAccessor, dstAccessor, in provenance, InterpolationMode.Linear);
+```
+
 ## Performance
 
 - **Sweep-line**: O(n log n) complexity
 - **Zero managed allocations** on the hot path
 - **Conditional provenance**: When not requested, provenance tracking has zero overhead
 - **Memory**: ~44 bytes per mesh vertex + 36 bytes per vertex for provenance (when enabled)
+- **NativeDetailTriangulator**: Fan is O(n), EarClipping is O(n²) per polygon, Tess is O(n log n)

@@ -2,9 +2,9 @@
 
 ## Overview
 
-`SangriaMeshGeometry` is a static utility class containing geometry algorithms used internally by the Unity Mesh conversion pipeline and available for general use. All algorithms are independent of the Unity Mesh API.
+The `Math/` module provides geometry algorithms used internally by the Unity Mesh conversion pipeline and available for general use. It contains polygon triangulation utilities, ray-triangle intersection algorithms, and triangle-triangle intersection testing.
 
-**Source file**: `SangriaMeshGeometry.cs`
+**Source files**: `SangriaMeshGeometry.cs`, `SangriaMeshRayTriangleIntersectors.cs`, `SangriaMeshTriangleTriangleIntersector.cs`
 
 ## Polygon Projection
 
@@ -133,3 +133,92 @@ TryBuildProjectedPolygon (3D → 2D)
     │
     └── Failure → WriteFanTriangulation (fallback)
 ```
+
+## Ray-Triangle Intersection
+
+**Class**: `SangriaMeshRayTriangleIntersectors` (static)
+
+Provides three ray-triangle intersection algorithms, all returning a `RayTriangleHit` with parametric distance `T`, barycentric coordinates `U`, `V`, `W`, determinant, and geometric normal.
+
+### RayTriangleHit
+
+```csharp
+public struct RayTriangleHit
+{
+    public float T;               // Parametric distance along ray
+    public float U;               // Barycentric coordinate
+    public float V;               // Barycentric coordinate
+    public float Determinant;     // Triangle determinant (sign indicates facing)
+    public float3 GeometricNormal;// Unnormalized face normal
+    public readonly float W => 1f - U - V;
+}
+```
+
+### TryIntersectMoeller
+
+Möller–Trumbore algorithm. Fast general-purpose method.
+
+```csharp
+public static bool TryIntersectMoeller(
+    in float3 rayOrigin, in float3 rayDirection,
+    float tNear, float tFar,
+    in float3 v0, in float3 v1, in float3 v2,
+    out RayTriangleHit hit,
+    bool backfaceCulling = false,
+    float epsilon = DefaultEpsilon);
+```
+
+### TryIntersectPluecker
+
+Plücker-coordinate method. Higher numerical precision for near-edge hits.
+
+```csharp
+public static bool TryIntersectPluecker(
+    in float3 rayOrigin, in float3 rayDirection,
+    float tNear, float tFar,
+    in float3 v0, in float3 v1, in float3 v2,
+    out RayTriangleHit hit,
+    bool backfaceCulling = false,
+    float epsilon = DefaultEpsilon);
+```
+
+### TryIntersectWoop
+
+Woop's watertight algorithm. Guarantees no missed intersections at shared edges.
+
+```csharp
+public static bool TryIntersectWoop(
+    in float3 rayOrigin, in float3 rayDirection,
+    float tNear, float tFar,
+    in float3 v0, in float3 v1, in float3 v2,
+    out RayTriangleHit hit,
+    bool backfaceCulling = false,
+    float epsilon = DefaultEpsilon);
+```
+
+### Constants
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `DefaultEpsilon` | `1e-8f` | Default tolerance for degenerate triangle detection |
+
+## Triangle-Triangle Intersection
+
+**Class**: `SangriaMeshTriangleTriangleIntersector` (static)
+
+Tests whether two triangles in 3D space intersect, including coplanar cases.
+
+### Intersects
+
+```csharp
+public static bool Intersects(
+    in float3 a0, in float3 a1, in float3 a2,
+    in float3 b0, in float3 b1, in float3 b2,
+    float epsilon = DefaultEpsilon);
+```
+
+**Algorithm**: Uses the Möller interval-overlap method — projects both triangles onto the line of intersection of their supporting planes and checks for overlapping intervals. Coplanar triangles are handled via 2D projection and edge-crossing tests.
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `DefaultEpsilon` | `1e-5f` | Tolerance for coplanarity and sign tests |
