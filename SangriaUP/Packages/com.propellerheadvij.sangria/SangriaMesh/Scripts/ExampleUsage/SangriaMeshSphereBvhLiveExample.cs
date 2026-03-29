@@ -233,7 +233,14 @@ public sealed class SangriaMeshSphereBvhLiveExample : MonoBehaviour
                 int elementIndex = candidateElements[c];
                 int primitiveIndex = elements[elementIndex].Value;
 
-                if (m_Detail.RayHitsPrimitive(primitiveIndex, rayOrigin, rayDir, tMax, ref outPositions, ref outIndices))
+                if (m_Detail.RayHitsPrimitive(
+                        primitiveIndex,
+                        rayOrigin,
+                        rayDir,
+                        tMax,
+                        ref outPositions,
+                        ref outIndices,
+                        useConvexFanPath: false))
                 {
                     m_RayHitPrimitiveCount++;
                     PaintPrimitive(primitiveIndex, red, colorAccessor);

@@ -621,6 +621,172 @@ public class SangriaMeshCoreTests
     }
 
     [Test]
+    public void RayHitsPrimitive_ConvexQuad_HitUsesFanFastPath()
+    {
+        var detail = new NativeDetail(8, Allocator.TempJob);
+        var outPositions = new NativeList<float3>(8, Allocator.Temp);
+        var outIndices = new NativeList<int>(8, Allocator.Temp);
+        try
+        {
+            int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
+            int p1 = detail.AddPoint(new float3(2f, 0f, 0f));
+            int p2 = detail.AddPoint(new float3(2f, 2f, 0f));
+            int p3 = detail.AddPoint(new float3(0f, 2f, 0f));
+
+            int v0 = detail.AddVertex(p0);
+            int v1 = detail.AddVertex(p1);
+            int v2 = detail.AddVertex(p2);
+            int v3 = detail.AddVertex(p3);
+
+            using var quad = new NativeArray<int>(new[] { v0, v1, v2, v3 }, Allocator.Temp);
+            int primitive = detail.AddPrimitive(quad);
+            Assert.GreaterOrEqual(primitive, 0);
+
+            bool hit = detail.RayHitsPrimitive(
+                primitive,
+                new float3(1f, 1f, -1f),
+                new float3(0f, 0f, 1f),
+                10f,
+                ref outPositions,
+                ref outIndices,
+                useConvexFanPath: true);
+
+            Assert.IsTrue(hit);
+            Assert.AreEqual(4, outPositions.Length);
+            Assert.AreEqual(4, outIndices.Length);
+        }
+        finally
+        {
+            if (outIndices.IsCreated)
+                outIndices.Dispose();
+            if (outPositions.IsCreated)
+                outPositions.Dispose();
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void RayHitsPrimitive_ConvexQuad_MissSkipsFallbackTriangulation()
+    {
+        var detail = new NativeDetail(8, Allocator.TempJob);
+        var outPositions = new NativeList<float3>(8, Allocator.Temp);
+        var outIndices = new NativeList<int>(8, Allocator.Temp);
+        try
+        {
+            int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
+            int p1 = detail.AddPoint(new float3(2f, 0f, 0f));
+            int p2 = detail.AddPoint(new float3(2f, 2f, 0f));
+            int p3 = detail.AddPoint(new float3(0f, 2f, 0f));
+
+            int v0 = detail.AddVertex(p0);
+            int v1 = detail.AddVertex(p1);
+            int v2 = detail.AddVertex(p2);
+            int v3 = detail.AddVertex(p3);
+
+            using var quad = new NativeArray<int>(new[] { v0, v1, v2, v3 }, Allocator.Temp);
+            int primitive = detail.AddPrimitive(quad);
+            Assert.GreaterOrEqual(primitive, 0);
+
+            bool hit = detail.RayHitsPrimitive(
+                primitive,
+                new float3(3f, 3f, -1f),
+                new float3(0f, 0f, 1f),
+                10f,
+                ref outPositions,
+                ref outIndices,
+                useConvexFanPath: true);
+
+            Assert.IsFalse(hit);
+            Assert.AreEqual(4, outPositions.Length);
+            Assert.AreEqual(4, outIndices.Length);
+        }
+        finally
+        {
+            if (outIndices.IsCreated)
+                outIndices.Dispose();
+            if (outPositions.IsCreated)
+                outPositions.Dispose();
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void RayHitsPrimitive_ConcavePolygon_UsesTriangulationFallback()
+    {
+        var detail = new NativeDetail(16, Allocator.TempJob);
+        var outPositions = new NativeList<float3>(16, Allocator.Temp);
+        var outIndices = new NativeList<int>(32, Allocator.Temp);
+        try
+        {
+            int p0 = detail.AddPoint(new float3(0f, 0f, 0f));
+            int p1 = detail.AddPoint(new float3(3f, 0f, 0f));
+            int p2 = detail.AddPoint(new float3(3f, 3f, 0f));
+            int p3 = detail.AddPoint(new float3(1.5f, 1f, 0f));
+            int p4 = detail.AddPoint(new float3(0f, 3f, 0f));
+
+            int v0 = detail.AddVertex(p0);
+            int v1 = detail.AddVertex(p1);
+            int v2 = detail.AddVertex(p2);
+            int v3 = detail.AddVertex(p3);
+            int v4 = detail.AddVertex(p4);
+
+            using var concave = new NativeArray<int>(new[] { v0, v1, v2, v3, v4 }, Allocator.Temp);
+            int primitive = detail.AddPrimitive(concave);
+            Assert.GreaterOrEqual(primitive, 0);
+
+            bool hit = detail.RayHitsPrimitive(
+                primitive,
+                new float3(2.4f, 2.4f, -1f),
+                new float3(0f, 0f, 1f),
+                10f,
+                ref outPositions,
+                ref outIndices,
+                useConvexFanPath: false);
+
+            Assert.IsTrue(hit);
+            Assert.AreEqual(9, outIndices.Length);
+        }
+        finally
+        {
+            if (outIndices.IsCreated)
+                outIndices.Dispose();
+            if (outPositions.IsCreated)
+                outPositions.Dispose();
+            detail.Dispose();
+        }
+    }
+
+    [Test]
+    public void IsPlanarConvexPolygon_ReturnsExpectedResult()
+    {
+        var convex = new NativeArray<float3>(4, Allocator.Temp);
+        var concave = new NativeArray<float3>(5, Allocator.Temp);
+        try
+        {
+            convex[0] = new float3(0f, 0f, 0f);
+            convex[1] = new float3(2f, 0f, 0f);
+            convex[2] = new float3(2f, 2f, 0f);
+            convex[3] = new float3(0f, 2f, 0f);
+
+            concave[0] = new float3(0f, 0f, 0f);
+            concave[1] = new float3(3f, 0f, 0f);
+            concave[2] = new float3(3f, 3f, 0f);
+            concave[3] = new float3(1.5f, 1f, 0f);
+            concave[4] = new float3(0f, 3f, 0f);
+
+            Assert.IsTrue(convex.IsPlanarConvexPolygon());
+            Assert.IsFalse(concave.IsPlanarConvexPolygon());
+        }
+        finally
+        {
+            if (concave.IsCreated)
+                concave.Dispose();
+            if (convex.IsCreated)
+                convex.Dispose();
+        }
+    }
+
+    [Test]
     public void CompileSparseTopologyAfterDeletionProducesDenseResult()
     {
         var detail = new NativeDetail(8, Allocator.TempJob);
