@@ -22,6 +22,20 @@ namespace SangriaMesh
         public byte Count;
         public ProvenanceKind Kind;
 
+        public int DominantSource
+        {
+            get
+            {
+                if (Count <= 1) return Src0;
+                int bestSrc = Src0;
+                float bestW = W0;
+                if (Count > 1 && W1 > bestW) { bestSrc = Src1; bestW = W1; }
+                if (Count > 2 && W2 > bestW) { bestSrc = Src2; bestW = W2; }
+                if (Count > 3 && W3 > bestW) { bestSrc = Src3; }
+                return bestSrc;
+            }
+        }
+
         public static ProvenanceRecord Identity(int sourcePointId)
         {
             return new ProvenanceRecord

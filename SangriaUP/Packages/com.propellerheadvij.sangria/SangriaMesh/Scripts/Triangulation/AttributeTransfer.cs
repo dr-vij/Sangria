@@ -95,6 +95,68 @@ namespace SangriaMesh
             return CoreResult.Success;
         }
 
+        public static CoreResult TransferVertexAttributes(
+            ref NativeDetail source,
+            ref NativeDetail destination,
+            in NativeArray<int> sourceVertexForOutputVertex)
+        {
+            int sourceColumnCount = source.GetVertexAttributeColumnCount();
+            for (int col = 0; col < sourceColumnCount; col++)
+            {
+                var column = source.GetVertexAttributeColumnAt(col);
+                int attributeId = column.AttributeId;
+
+                if (!destination.HasVertexAttribute(attributeId))
+                    destination.AddVertexAttributeRaw(attributeId, column.Stride, column.TypeHash);
+
+                var dstColumn = destination.GetVertexAttributeColumnByIdUnchecked(attributeId);
+                CopyColumnByMapping(in column, in dstColumn, in sourceVertexForOutputVertex);
+            }
+
+            return CoreResult.Success;
+        }
+
+        public static CoreResult TransferPrimitiveAttributes(
+            ref NativeDetail source,
+            ref NativeDetail destination,
+            in NativeArray<int> sourcePrimitiveForOutputPrimitive)
+        {
+            int sourceColumnCount = source.GetPrimitiveAttributeColumnCount();
+            for (int col = 0; col < sourceColumnCount; col++)
+            {
+                var column = source.GetPrimitiveAttributeColumnAt(col);
+                int attributeId = column.AttributeId;
+
+                if (!destination.HasPrimitiveAttribute(attributeId))
+                    destination.AddPrimitiveAttributeRaw(attributeId, column.Stride, column.TypeHash);
+
+                var dstColumn = destination.GetPrimitiveAttributeColumnByIdUnchecked(attributeId);
+                CopyColumnByMapping(in column, in dstColumn, in sourcePrimitiveForOutputPrimitive);
+            }
+
+            return CoreResult.Success;
+        }
+
+        private static void CopyColumnByMapping(
+            in AttributeColumn srcColumn,
+            in AttributeColumn dstColumn,
+            in NativeArray<int> sourceIndexForOutput)
+        {
+            unsafe
+            {
+                byte* srcPtr = srcColumn.Buffer.Ptr;
+                byte* dstPtr = dstColumn.Buffer.Ptr;
+                int stride = srcColumn.Stride;
+
+                for (int i = 0; i < sourceIndexForOutput.Length; i++)
+                {
+                    int srcIdx = sourceIndexForOutput[i];
+                    if (srcIdx >= 0)
+                        UnsafeUtility.MemCpy(dstPtr + i * stride, srcPtr + srcIdx * stride, stride);
+                }
+            }
+        }
+
         public static CoreResult TransferAttribute<T>(
             NativeAttributeAccessor<T> sourceAccessor,
             NativeAttributeAccessor<T> destinationAccessor,
@@ -154,7 +216,7 @@ namespace SangriaMesh
 
             if (record.Count == 1 || mode == InterpolationMode.Nearest)
             {
-                int srcIdx = record.Src0;
+                int srcIdx = record.DominantSource;
                 UnsafeUtility.MemCpy(dst, srcPtr + srcIdx * stride, stride);
                 return;
             }
@@ -163,8 +225,9 @@ namespace SangriaMesh
             int floatCount = stride / 4;
             if (floatCount <= 0 || stride % 4 != 0)
             {
-                // Non-float type: fallback to nearest
-                UnsafeUtility.MemCpy(dst, srcPtr + record.Src0 * stride, stride);
+                // Non-float type: fallback to nearest (dominant source)
+                int nearestIdx = record.DominantSource;
+                UnsafeUtility.MemCpy(dst, srcPtr + nearestIdx * stride, stride);
                 return;
             }
 

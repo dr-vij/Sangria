@@ -135,6 +135,35 @@ namespace SangriaMesh
             return new CompiledResourceSet(descriptors, idToDescriptor, data);
         }
 
+        public unsafe void CopyTo(ref ResourceRegistry destination)
+        {
+            using var enumerator = m_Resources.GetEnumerator();
+            while (enumerator.MoveNext())
+            {
+                var kv = enumerator.Current;
+                int resourceId = kv.Key;
+                var entry = kv.Value;
+
+                destination.EnsureResourceCapacityForInsert();
+                var newEntry = new ResourceEntry
+                {
+                    TypeHash = entry.TypeHash,
+                    SizeBytes = entry.SizeBytes,
+                    Buffer = new UnsafeList<byte>(entry.SizeBytes, destination.m_Allocator)
+                };
+                newEntry.Buffer.Length = entry.SizeBytes;
+                UnsafeUtility.MemCpy(newEntry.Buffer.Ptr, entry.Buffer.Ptr, entry.SizeBytes);
+
+                if (destination.m_Resources.TryGetValue(resourceId, out var existing))
+                {
+                    if (existing.Buffer.IsCreated)
+                        existing.Buffer.Dispose();
+                }
+
+                destination.m_Resources[resourceId] = newEntry;
+            }
+        }
+
         public void Clear()
         {
             using var enumerator = m_Resources.GetEnumerator();

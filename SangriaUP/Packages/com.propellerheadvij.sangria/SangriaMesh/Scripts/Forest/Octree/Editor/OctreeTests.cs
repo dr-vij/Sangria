@@ -1,12 +1,9 @@
-﻿using System.Diagnostics;
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using NativeOctree;
-using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
-using Debug = UnityEngine.Debug;
 using Random = UnityEngine.Random;
 
 namespace SangriaMesh.Tests.Octree
@@ -28,12 +25,9 @@ namespace SangriaMesh.Tests.Octree
             return values;
         }
 
-        [Test]
-        public void InsertTriggerDivideBulk()
+        NativeArray<OctElement<int>> CreateElements(float3[] values, Allocator allocator)
         {
-            var values = GetValues();
-            var elements = new NativeArray<OctElement<int>>(values.Length, Allocator.TempJob);
-
+            var elements = new NativeArray<OctElement<int>>(values.Length, allocator);
             for (int i = 0; i < values.Length; i++)
             {
                 elements[i] = new OctElement<int>
@@ -42,6 +36,14 @@ namespace SangriaMesh.Tests.Octree
                     element = i
                 };
             }
+            return elements;
+        }
+
+        [Test]
+        public void InsertTriggerDivideBulk()
+        {
+            var values = GetValues();
+            var elements = CreateElements(values, Allocator.TempJob);
 
             var job = new OctreeJobs.AddBulkJob<int>
             {
@@ -49,14 +51,27 @@ namespace SangriaMesh.Tests.Octree
                 Octree = new NativeOctree<int>(Bounds)
             };
 
-            var s = Stopwatch.StartNew();
-
             job.Run();
 
-            s.Stop();
-            Debug.Log(s.Elapsed.TotalMilliseconds);
+            // Query the full bounds — every inserted element must be returned.
+            var results = new NativeList<OctElement<int>>(values.Length, Allocator.Temp);
+            job.Octree.RangeQuery(Bounds, results);
 
-            OctreeDrawer.Draw(job.Octree);
+            Assert.AreEqual(values.Length, results.Length,
+                "Full-bounds query must return every inserted element.");
+
+            var seen = new bool[values.Length];
+            for (int i = 0; i < results.Length; i++)
+            {
+                int id = results[i].element;
+                Assert.IsTrue(id >= 0 && id < values.Length,
+                    $"Returned element id {id} is out of range.");
+                Assert.IsFalse(seen[id],
+                    $"Duplicate element id {id} in query results.");
+                seen[id] = true;
+            }
+
+            results.Dispose();
             job.Octree.Dispose();
             elements.Dispose();
         }
@@ -65,69 +80,78 @@ namespace SangriaMesh.Tests.Octree
         public void RangeQueryAfterBulk()
         {
             var values = GetValues();
-            NativeArray<OctElement<int>> elements = new NativeArray<OctElement<int>>(values.Length, Allocator.TempJob);
-
-            for (int i = 0; i < values.Length; i++)
-            {
-                elements[i] = new OctElement<int>
-                {
-                    pos = values[i],
-                    element = i
-                };
-            }
+            var elements = CreateElements(values, Allocator.TempJob);
 
             var octree = new NativeOctree<int>(Bounds);
             octree.ClearAndBulkInsert(elements);
 
-            var queryJob = new OctreeJobs.RangeQueryJob<int>
+            var queryBounds = new AABB {Center = float3.zero, Extents = new float3(200, 200, 200)};
+            var results = new NativeList<OctElement<int>>(1000, Allocator.Temp);
+            octree.RangeQuery(queryBounds, results);
+
+            // Build brute-force expected set.
+            var expected = new bool[values.Length];
+            int expectedCount = 0;
+            for (int i = 0; i < values.Length; i++)
             {
-                Octree = octree,
-                Bounds = new AABB {Center = float3.zero, Extents = new float3(200, 200, 200)},
-                Results = new NativeList<OctElement<int>>(1000, Allocator.TempJob)
-            };
+                if (queryBounds.Contains(values[i]))
+                {
+                    expected[i] = true;
+                    expectedCount++;
+                }
+            }
 
-            var s = Stopwatch.StartNew();
-            queryJob.Run();
-            s.Stop();
-            Debug.Log(s.Elapsed.TotalMilliseconds + " result: " + queryJob.Results.Length);
+            Assert.AreEqual(expectedCount, results.Length,
+                "Range query result count differs from brute-force expectation.");
 
-            OctreeDrawer.DrawWithResults(queryJob);
+            var seen = new bool[values.Length];
+            for (int i = 0; i < results.Length; i++)
+            {
+                int id = results[i].element;
+                Assert.IsTrue(id >= 0 && id < values.Length,
+                    $"Returned element id {id} is out of range.");
+                Assert.IsTrue(expected[id],
+                    $"Element {id} at {values[id]} returned by query but is outside bounds.");
+                Assert.IsFalse(seen[id],
+                    $"Duplicate element id {id} in query results.");
+                seen[id] = true;
+            }
+
+            results.Dispose();
             octree.Dispose();
             elements.Dispose();
-            queryJob.Results.Dispose();
         }
 
         [Test]
         public void InsertTriggerDivideNonBurstBulk()
         {
             var values = GetValues();
-            var positions = new NativeArray<float3>(values.Length, Allocator.TempJob);
+            var elements = CreateElements(values, Allocator.Temp);
             var octree = new NativeOctree<int>(Bounds);
-
-            positions.CopyFrom(values);
-
-            NativeArray<OctElement<int>> elements = new NativeArray<OctElement<int>>(positions.Length, Allocator.Temp);
-
-            for (int i = 0; i < positions.Length; i++)
-            {
-                elements[i] = new OctElement<int>
-                {
-                    pos = positions[i],
-                    element = i
-                };
-            }
-
-            var s = Stopwatch.StartNew();
 
             octree.ClearAndBulkInsert(elements);
 
-            s.Stop();
-            Debug.Log(s.Elapsed.TotalMilliseconds);
+            // Query the full bounds — every inserted element must be returned.
+            var results = new NativeList<OctElement<int>>(values.Length, Allocator.Temp);
+            octree.RangeQuery(Bounds, results);
 
-            OctreeDrawer.Draw(octree);
+            Assert.AreEqual(values.Length, results.Length,
+                "Full-bounds query must return every inserted element.");
+
+            var seen = new bool[values.Length];
+            for (int i = 0; i < results.Length; i++)
+            {
+                int id = results[i].element;
+                Assert.IsTrue(id >= 0 && id < values.Length,
+                    $"Returned element id {id} is out of range.");
+                Assert.IsFalse(seen[id],
+                    $"Duplicate element id {id} in query results.");
+                seen[id] = true;
+            }
+
+            results.Dispose();
             octree.Dispose();
             elements.Dispose();
-            positions.Dispose();
         }
     }
 }

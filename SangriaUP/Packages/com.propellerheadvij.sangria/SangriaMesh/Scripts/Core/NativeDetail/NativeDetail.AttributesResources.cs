@@ -265,6 +265,82 @@ namespace SangriaMesh
             return result;
         }
 
+        public int GetVertexAttributeColumnCount()
+        {
+            ThrowIfDisposed();
+            return m_VertexAttributes.GetColumnCount();
+        }
+
+        public AttributeColumn GetVertexAttributeColumnAt(int index)
+        {
+            ThrowIfDisposed();
+            return m_VertexAttributes.GetColumnAt(index);
+        }
+
+        public AttributeColumn GetVertexAttributeColumnByIdUnchecked(int attributeId)
+        {
+            ThrowIfDisposed();
+            int count = m_VertexAttributes.GetColumnCount();
+            for (int i = 0; i < count; i++)
+            {
+                var col = m_VertexAttributes.GetColumnAt(i);
+                if (col.AttributeId == attributeId)
+                    return col;
+            }
+            return default;
+        }
+
+        public CoreResult AddVertexAttributeRaw(int attributeId, int stride, int typeHash)
+        {
+            ThrowIfDisposed();
+            CoreResult result = m_VertexAttributes.RegisterAttributeRaw(attributeId, stride, typeHash, m_Vertices.Capacity);
+            if (result == CoreResult.Success)
+                m_AttributeVersion++;
+            return result;
+        }
+
+        public int GetPrimitiveAttributeColumnCount()
+        {
+            ThrowIfDisposed();
+            return m_PrimitiveAttributes.GetColumnCount();
+        }
+
+        public AttributeColumn GetPrimitiveAttributeColumnAt(int index)
+        {
+            ThrowIfDisposed();
+            return m_PrimitiveAttributes.GetColumnAt(index);
+        }
+
+        public AttributeColumn GetPrimitiveAttributeColumnByIdUnchecked(int attributeId)
+        {
+            ThrowIfDisposed();
+            int count = m_PrimitiveAttributes.GetColumnCount();
+            for (int i = 0; i < count; i++)
+            {
+                var col = m_PrimitiveAttributes.GetColumnAt(i);
+                if (col.AttributeId == attributeId)
+                    return col;
+            }
+            return default;
+        }
+
+        public CoreResult AddPrimitiveAttributeRaw(int attributeId, int stride, int typeHash)
+        {
+            ThrowIfDisposed();
+            CoreResult result = m_PrimitiveAttributes.RegisterAttributeRaw(attributeId, stride, typeHash, m_Primitives.Capacity);
+            if (result == CoreResult.Success)
+                m_AttributeVersion++;
+            return result;
+        }
+
+        public void CopyResourcesFrom(ref NativeDetail source)
+        {
+            ThrowIfDisposed();
+            source.ThrowIfDisposed();
+            source.m_Resources.CopyTo(ref m_Resources);
+            m_AttributeVersion++;
+        }
+
         #endregion
     }
 }
