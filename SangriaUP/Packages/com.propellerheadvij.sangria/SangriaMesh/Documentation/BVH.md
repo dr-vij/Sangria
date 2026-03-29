@@ -2,7 +2,7 @@
 
 ## Overview
 
-`NativeBvh<T>` is a generic, native bounding-volume hierarchy for fast AABB overlap queries. It stores elements with axis-aligned bounding boxes and user-defined payload values, supports incremental refit, and provides Burst-compatible job wrappers.
+`NativeBvh<T>` is a generic, native bounding-volume hierarchy for fast AABB overlap and ray intersection queries. It stores elements with axis-aligned bounding boxes and user-defined payload values, supports incremental refit, and provides Burst-compatible job wrappers.
 
 **Source files**: `NativeBvh.cs`, `BvhElement.cs`, `BvhAabb.cs`, `BvhNode.cs`, `BvhJobs.cs`, `BvhGizmoVisualizer.cs`
 
@@ -22,6 +22,7 @@ public struct BvhAabb
     public float3 Extents { get; }
     public float SurfaceArea();
     public bool Intersects(BvhAabb other);
+    public bool IntersectsRay(float3 rayOrigin, float3 invDir, float tNear, float tFar);
     public bool Contains(BvhAabb other);
     public bool Contains(float3 point);
     public BvhAabb Expanded(float value);
@@ -112,6 +113,22 @@ For zero-allocation queries, provide a pre-allocated traversal stack:
 ```csharp
 var stack = new NativeList<int>(64, Allocator.TempJob);
 bvh.Query(queryBounds, indices, stack);
+```
+
+### Ray Queries
+
+Ray queries return element indices whose bounding boxes intersect the given ray:
+
+```csharp
+var hits = new NativeList<int>(64, Allocator.TempJob);
+bvh.RayQuery(rayOrigin, rayDir, tMax, hits);
+```
+
+For zero-allocation ray queries, provide a pre-allocated traversal stack:
+
+```csharp
+var stack = new NativeList<int>(64, Allocator.TempJob);
+bvh.RayQuery(rayOrigin, rayDir, tMax, hits, stack);
 ```
 
 ### Refitting

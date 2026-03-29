@@ -4,7 +4,7 @@
 
 `NativeDetail` is the central editable geometry container in SangriaMesh. It stores points, vertices, and primitives with sparse topology (alive flags + free lists) and typed attribute storage.
 
-**Source files**: `NativeDetail.cs`, `NativeDetail.Utility.cs`, `NativeDetail.Compile.cs`, `NativeDetail.Primitive.cs`, `NativeDetail.PointVertex.cs`, `NativeDetail.AttributesResources.cs`, `NativeDetail.BurstJobs.cs`
+**Source files**: `NativeDetail.cs`, `NativeDetail.Utility.cs`, `NativeDetail.Compile.cs`, `NativeDetail.Primitive.cs`, `NativeDetail.PointVertex.cs`, `NativeDetail.AttributesResources.cs`, `NativeDetail.BurstJobs.cs`, `NativeDetail.RayQuery.cs`
 
 ## Construction
 
@@ -179,6 +179,32 @@ int garbageLen = detail.PrimitiveGarbageLength;
 bool hasGarbage = detail.PrimitiveHasGarbage;
 int dataLen = detail.PrimitiveDataLength;
 ```
+
+## Ray Queries
+
+Test whether a ray intersects a primitive. Triangles are tested directly; N-gons are triangulated on-the-fly via `Triangulation.TriangulateRaw` and each resulting triangle is tested with the Möller–Trumbore algorithm.
+
+```csharp
+var outPositions = new NativeList<float3>(16, Allocator.Temp);
+var outIndices = new NativeList<int>(48, Allocator.Temp);
+
+bool hit = detail.RayHitsPrimitive(primitiveIndex, rayOrigin, rayDir, tMax,
+    ref outPositions, ref outIndices);
+
+outIndices.Dispose();
+outPositions.Dispose();
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `primitiveIndex` | Index of the primitive to test |
+| `rayOrigin` | Ray origin in local space |
+| `rayDir` | Ray direction (unit length) |
+| `tMax` | Maximum ray distance |
+| `outPositions` | Reusable scratch buffer for triangulated positions (N-gon path) |
+| `outIndices` | Reusable scratch buffer for triangulated indices (N-gon path) |
+
+Returns `true` if the ray intersects any triangle of the primitive within `[0, tMax]`.
 
 ## Dense Topology Allocation
 

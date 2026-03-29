@@ -190,7 +190,7 @@ public sealed class SangriaMeshSphereBvhLiveExample : MonoBehaviour
 
         float4x4 worldToLocal = Unity.Mathematics.float4x4.identity;
         if (transform != null)
-            worldToLocal = inverse((float4x4)transform.localToWorldMatrix);
+            worldToLocal = inverse(transform.localToWorldMatrix);
 
         float3 localOrigin = mul(worldToLocal, float4(worldOrigin, 1f)).xyz;
         float3 localTarget = mul(worldToLocal, float4(worldTarget, 1f)).xyz;
@@ -198,13 +198,13 @@ public sealed class SangriaMeshSphereBvhLiveExample : MonoBehaviour
         float rayLength = length(localDir);
         if (rayLength < 1e-8f)
             return;
-        localDir = localDir / rayLength;
+        localDir /= rayLength;
 
         var candidateElements = new NativeList<int>(64, Allocator.Temp);
         var traversalStack = new NativeList<int>(64, Allocator.Temp);
         try
         {
-            RayQueryBvh(localOrigin, localDir, rayLength, candidateElements, traversalStack);
+            m_Bvh.RayQuery(localOrigin, localDir, rayLength, candidateElements, traversalStack);
             ProcessRayCandidates(localOrigin, localDir, rayLength, candidateElements);
         }
         finally
@@ -214,61 +214,6 @@ public sealed class SangriaMeshSphereBvhLiveExample : MonoBehaviour
         }
     }
 
-    private void RayQueryBvh(float3 rayOrigin, float3 rayDir, float tMax,
-        NativeList<int> candidateElements, NativeList<int> stack)
-    {
-        var nodes = m_Bvh.Nodes;
-        var elements = m_Bvh.Elements;
-        if (nodes.Length == 0)
-            return;
-
-        float3 invDir = rcp(rayDir);
-
-        stack.Clear();
-        stack.Add(m_Bvh.RootIndex);
-
-        while (stack.Length > 0)
-        {
-            int last = stack.Length - 1;
-            int nodeIndex = stack[last];
-            stack.RemoveAtSwapBack(last);
-
-            if ((uint)nodeIndex >= (uint)nodes.Length)
-                continue;
-
-            BvhNode node = nodes[nodeIndex];
-            if (!RayIntersectsAabb(rayOrigin, invDir, 0f, tMax, node.Bounds))
-                continue;
-
-            if (node.Leaf)
-            {
-                for (int i = 0; i < node.ElementCount; i++)
-                {
-                    int elementIndex = node.FirstElement + i;
-                    if ((uint)elementIndex < (uint)elements.Length)
-                        candidateElements.Add(elementIndex);
-                }
-            }
-            else
-            {
-                stack.Add(node.Left);
-                stack.Add(node.Right);
-            }
-        }
-    }
-
-    private static bool RayIntersectsAabb(float3 rayOrigin, float3 invDir, float tNear, float tFar, BvhAabb aabb)
-    {
-        float3 t0 = (aabb.Min - rayOrigin) * invDir;
-        float3 t1 = (aabb.Max - rayOrigin) * invDir;
-        float3 tmin = min(t0, t1);
-        float3 tmax = max(t0, t1);
-
-        float enter = max(tNear, max(tmin.x, max(tmin.y, tmin.z)));
-        float exit = min(tFar, min(tmax.x, min(tmax.y, tmax.z)));
-
-        return enter <= exit;
-    }
 
     private void ProcessRayCandidates(float3 rayOrigin, float3 rayDir, float tMax, NativeList<int> candidateElements)
     {
@@ -288,7 +233,7 @@ public sealed class SangriaMeshSphereBvhLiveExample : MonoBehaviour
                 int elementIndex = candidateElements[c];
                 int primitiveIndex = elements[elementIndex].Value;
 
-                if (RayHitsPrimitive(primitiveIndex, rayOrigin, rayDir, tMax, ref outPositions, ref outIndices))
+                if (m_Detail.RayHitsPrimitive(primitiveIndex, rayOrigin, rayDir, tMax, ref outPositions, ref outIndices))
                 {
                     m_RayHitPrimitiveCount++;
                     PaintPrimitive(primitiveIndex, red, colorAccessor);
@@ -302,63 +247,6 @@ public sealed class SangriaMeshSphereBvhLiveExample : MonoBehaviour
         }
     }
 
-    private bool RayHitsPrimitive(int primitiveIndex, float3 rayOrigin, float3 rayDir, float tMax,
-        ref NativeList<float3> outPositions, ref NativeList<int> outIndices)
-    {
-        NativeSlice<int> vertices = m_Detail.GetPrimitiveVertices(primitiveIndex);
-        int vertCount = vertices.Length;
-        if (vertCount < 3)
-            return false;
-
-        if (vertCount == 3)
-        {
-            float3 v0 = m_Detail.GetPointPosition(m_Detail.GetVertexPoint(vertices[0]));
-            float3 v1 = m_Detail.GetPointPosition(m_Detail.GetVertexPoint(vertices[1]));
-            float3 v2 = m_Detail.GetPointPosition(m_Detail.GetVertexPoint(vertices[2]));
-
-            return SangriaMeshRayTriangleIntersectors.TryIntersectMoeller(
-                rayOrigin, rayDir, 0f, tMax, v0, v1, v2, out _, false);
-        }
-
-        var positions = new NativeArray<float3>(vertCount, Allocator.Temp);
-        var contourOffsets = new NativeArray<int>(new[] { 0, vertCount }, Allocator.Temp);
-        var contourPointIndices = new NativeArray<int>(vertCount, Allocator.Temp);
-        try
-        {
-            for (int i = 0; i < vertCount; i++)
-            {
-                positions[i] = m_Detail.GetPointPosition(m_Detail.GetVertexPoint(vertices[i]));
-                contourPointIndices[i] = i;
-            }
-
-            var contours = new NativeContourSet(positions, contourOffsets, contourPointIndices);
-            outPositions.Clear();
-            outIndices.Clear();
-            CoreResult result = Triangulation.TriangulateRaw(in contours, ref outPositions, ref outIndices);
-            if (result != CoreResult.Success)
-                return false;
-
-            int triCount = outIndices.Length / 3;
-            for (int t = 0; t < triCount; t++)
-            {
-                float3 v0 = outPositions[outIndices[t * 3]];
-                float3 v1 = outPositions[outIndices[t * 3 + 1]];
-                float3 v2 = outPositions[outIndices[t * 3 + 2]];
-
-                if (SangriaMeshRayTriangleIntersectors.TryIntersectMoeller(
-                        rayOrigin, rayDir, 0f, tMax, v0, v1, v2, out _, false))
-                    return true;
-            }
-        }
-        finally
-        {
-            contourPointIndices.Dispose();
-            contourOffsets.Dispose();
-            positions.Dispose();
-        }
-
-        return false;
-    }
 
     private void PaintPrimitive(int primitiveIndex, float4 color, NativeAttributeAccessor<float4> colorAccessor)
     {

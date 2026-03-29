@@ -100,7 +100,7 @@ detail.Dispose();
 | [Unity Mesh Conversion](UnityMeshConversion.md) | Converting SangriaMesh geometry to Unity Mesh |
 | [Geometry & Math](Geometry.md) | Geometry algorithms, ray-triangle & triangle-triangle intersectors |
 | [Triangulation](Triangulation.md) | Sweep-line contour tessellation, NativeDetailTriangulator, provenance |
-| [BVH](BVH.md) | Bounding-volume hierarchy for AABB overlap queries |
+| [BVH](BVH.md) | Bounding-volume hierarchy for AABB overlap and ray intersection queries |
 | [KDTree](KDTree.md) | KD-tree for nearest-neighbor and radial searches |
 | [Octree](Octree.md) | Native spatial partitioning for range queries |
 | [Debug Visualization](Debug.md) | Gizmo-based geometry visualization tools |

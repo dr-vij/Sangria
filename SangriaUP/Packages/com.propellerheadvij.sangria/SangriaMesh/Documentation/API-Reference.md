@@ -76,6 +76,7 @@ Central editable geometry container with sparse topology and typed attributes.
 | `IsPointHandleValid(ElementHandle)` | `bool` | Validate point handle |
 | `IsVertexHandleValid(ElementHandle)` | `bool` | Validate vertex handle |
 | `IsPrimitiveHandleValid(ElementHandle)` | `bool` | Validate primitive handle |
+| `RayHitsPrimitive(int, float3, float3, float, ref NativeList<float3>, ref NativeList<int>)` | `bool` | Test ray against primitive (tri or N-gon) |
 | `CollectGarbage(float minGarbageRatio)` | `bool` | Compact primitive storage |
 | `Compile(Allocator allocator)` | `NativeCompiledDetail` | Compile to dense snapshot |
 | `Clear()` | `void` | Reset all elements to dead |

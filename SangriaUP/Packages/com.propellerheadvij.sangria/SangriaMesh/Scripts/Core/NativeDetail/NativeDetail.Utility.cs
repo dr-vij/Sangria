@@ -1,5 +1,6 @@
 // Core: Internal NativeDetail helpers for adjacency sync, removal flows, and attribute packing.
 using System;
+using System.Diagnostics;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
@@ -56,6 +57,7 @@ namespace SangriaMesh
             m_IsDisposed = true;
         }
 
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
         private void ThrowIfDisposed()
         {
             if (m_IsDisposed)

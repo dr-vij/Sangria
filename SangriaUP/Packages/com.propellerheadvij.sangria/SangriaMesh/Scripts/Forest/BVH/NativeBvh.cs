@@ -370,6 +370,68 @@ namespace SangriaMesh
             }
         }
 
+        public void RayQuery(float3 rayOrigin, float3 rayDir, float tMax, NativeList<int> elementIndices)
+        {
+            RequireCreated();
+
+            var traversalStack = new NativeList<int>(64, Allocator.Temp);
+            try
+            {
+                RayQuery(rayOrigin, rayDir, tMax, elementIndices, traversalStack);
+            }
+            finally
+            {
+                if (traversalStack.IsCreated)
+                    traversalStack.Dispose();
+            }
+        }
+
+        public void RayQuery(float3 rayOrigin, float3 rayDir, float tMax,
+            NativeList<int> elementIndices, NativeList<int> traversalStack)
+        {
+            elementIndices.Clear();
+            traversalStack.Clear();
+
+            if (rootIndex < 0 || nodes.Length == 0)
+                return;
+
+            float3 invDir = rcp(rayDir);
+
+            traversalStack.Add(rootIndex);
+
+            while (traversalStack.Length > 0)
+            {
+                int last = traversalStack.Length - 1;
+                int nodeIndex = traversalStack[last];
+                traversalStack.RemoveAtSwapBack(last);
+
+                if ((uint)nodeIndex >= (uint)nodes.Length)
+                    continue;
+
+                BvhNode node = nodes[nodeIndex];
+                if (!node.Bounds.IntersectsRay(rayOrigin, invDir, 0f, tMax))
+                    continue;
+
+                if (node.Leaf)
+                {
+                    int first = node.FirstElement;
+                    int count = node.ElementCount;
+                    for (int i = 0; i < count; i++)
+                    {
+                        int elementIndex = first + i;
+                        if ((uint)elementIndex < (uint)elements.Length &&
+                            elements[elementIndex].Bounds.IntersectsRay(rayOrigin, invDir, 0f, tMax))
+                            elementIndices.Add(elementIndex);
+                    }
+                }
+                else
+                {
+                    traversalStack.Add(node.Left);
+                    traversalStack.Add(node.Right);
+                }
+            }
+        }
+
         public bool TryGetElement(int index, out BvhElement<T> element)
         {
             if (!elements.IsCreated || (uint)index >= (uint)elements.Length)

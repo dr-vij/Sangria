@@ -36,6 +36,20 @@ namespace SangriaMesh
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IntersectsRay(float3 rayOrigin, float3 invDir, float tNear, float tFar)
+        {
+            float3 t0 = (Min - rayOrigin) * invDir;
+            float3 t1 = (Max - rayOrigin) * invDir;
+            float3 tmin = math.min(t0, t1);
+            float3 tmax = math.max(t0, t1);
+
+            float enter = math.max(tNear, math.max(tmin.x, math.max(tmin.y, tmin.z)));
+            float exit = math.min(tFar, math.min(tmax.x, math.min(tmax.y, tmax.z)));
+
+            return enter <= exit;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains(float3 point)
         {
             return point.x >= Min.x && point.x <= Max.x &&
