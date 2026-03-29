@@ -6,14 +6,14 @@ using Unity.Mathematics;
 namespace SangriaMesh
 {
     /// <summary>
-    /// Содержит геометрические алгоритмы для SangriaMesh, независимые от Unity Mesh API.
+    /// Contains geometry algorithms for SangriaMesh that are independent of the Unity Mesh API.
     /// </summary>
     public static class SangriaMeshGeometry
     {
         public const float EarClipEpsilon = 1e-6f;
 
         /// <summary>
-        /// Проецирует 3D полигон на 2D плоскость, отбрасывая ось с наименьшей вариацией нормали.
+        /// Projects a 3D polygon onto a 2D plane by dropping the axis with the largest normal component.
         /// </summary>
         public static bool TryBuildProjectedPolygon(NativeList<float3> positions, NativeList<float2> projectedPolygon)
         {
@@ -61,7 +61,7 @@ namespace SangriaMesh
         }
 
         /// <summary>
-        /// Выполняет триангуляцию полигона методом Ear Clipping.
+        /// Triangulates a polygon using the ear clipping method.
         /// </summary>
         public static bool TryTriangulateEarClip(
             NativeList<int> primitiveVertices,
@@ -145,7 +145,7 @@ namespace SangriaMesh
         }
 
         /// <summary>
-        /// Записывает триангуляцию веером (fan) для выпуклых полигонов или в качестве запасного варианта.
+        /// Writes fan triangulation for convex polygons or as a fallback option.
         /// </summary>
         public static int WriteFanTriangulation(NativeList<int> primitiveVertices, NativeArray<int> triangles, int triangleWriteIndex)
         {
