@@ -1,0 +1,77 @@
+using System.Runtime.CompilerServices;
+using Unity.Mathematics;
+
+namespace SangriaMesh
+{
+    public struct BvhAabb
+    {
+        public float3 Min;
+        public float3 Max;
+
+        public float3 Center => (Min + Max) * 0.5f;
+
+        public float3 Extents => (Max - Min) * 0.5f;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public float SurfaceArea()
+        {
+            float3 size = math.max(Max - Min, 0f);
+            return 2f * (size.x * size.y + size.y * size.z + size.z * size.x);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(BvhAabb other)
+        {
+            return Min.x <= other.Max.x && Max.x >= other.Min.x &&
+                   Min.y <= other.Max.y && Max.y >= other.Min.y &&
+                   Min.z <= other.Max.z && Max.z >= other.Min.z;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Contains(BvhAabb other)
+        {
+            return Min.x <= other.Min.x && Max.x >= other.Max.x &&
+                   Min.y <= other.Min.y && Max.y >= other.Max.y &&
+                   Min.z <= other.Min.z && Max.z >= other.Max.z;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Contains(float3 point)
+        {
+            return point.x >= Min.x && point.x <= Max.x &&
+                   point.y >= Min.y && point.y <= Max.y &&
+                   point.z >= Min.z && point.z <= Max.z;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public BvhAabb Expanded(float value)
+        {
+            float3 expand = new float3(value);
+            return new BvhAabb
+            {
+                Min = Min - expand,
+                Max = Max + expand
+            };
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static BvhAabb FromCenterExtents(float3 center, float3 extents)
+        {
+            return new BvhAabb
+            {
+                Min = center - extents,
+                Max = center + extents
+            };
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static BvhAabb Union(BvhAabb a, BvhAabb b)
+        {
+            return new BvhAabb
+            {
+                Min = math.min(a.Min, b.Min),
+                Max = math.max(a.Max, b.Max)
+            };
+        }
+    }
+}

@@ -725,7 +725,7 @@ public class SangriaMeshCoreTests
             try
             {
                 int expectedPoints = 2 + (lat - 1) * lon;
-                int expectedPrimitives = 2 * lon * (lat - 1);
+                int expectedPrimitives = lon * lat;
                 int expectedVertices = 2 + (lat - 1) * (lon + 1);
 
                 Assert.AreEqual(expectedPoints, compiled.PointCount);
@@ -754,7 +754,7 @@ public class SangriaMeshCoreTests
             {
                 Assert.AreEqual(8, compiled.PointCount);
                 Assert.AreEqual(24, compiled.VertexCount);
-                Assert.AreEqual(12, compiled.PrimitiveCount);
+                Assert.AreEqual(6, compiled.PrimitiveCount);
 
                 var pointUseCounts = new int[compiled.PointCount];
                 for (int i = 0; i < compiled.VertexToPointDense.Length; i++)

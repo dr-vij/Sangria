@@ -68,21 +68,17 @@ public class SangriaMeshCompileTests
             int ringCount = latitudeSegments - 1;
             int bandCount = ringCount - 1;
             int midBandIndex = bandCount / 2;
-            int bandStart = longitudeSegments + midBandIndex * longitudeSegments * 2;
+            int bandStart = longitudeSegments + midBandIndex * longitudeSegments;
 
             int removed = 0;
             for (int lon = 0; lon < longitudeSegments; lon++)
             {
-                int primitiveA = bandStart + lon * 2;
-                int primitiveB = primitiveA + 1;
-
-                if (detail.RemovePrimitive(primitiveA))
-                    removed++;
-                if (detail.RemovePrimitive(primitiveB))
+                int primitive = bandStart + lon;
+                if (detail.RemovePrimitive(primitive))
                     removed++;
             }
 
-            Assert.AreEqual(longitudeSegments * 2, removed);
+            Assert.AreEqual(longitudeSegments, removed);
 
             var compiled = detail.Compile(Allocator.TempJob);
             try
