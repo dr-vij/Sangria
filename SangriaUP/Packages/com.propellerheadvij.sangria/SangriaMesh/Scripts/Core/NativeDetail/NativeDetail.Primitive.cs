@@ -1,6 +1,8 @@
 // Core: Primitive topology operations and dense topology allocation helpers.
 using System;
 using Unity.Collections;
+using Unity.Mathematics;
+using static Unity.Mathematics.math;
 
 namespace SangriaMesh
 {
@@ -231,6 +233,40 @@ namespace SangriaMesh
         {
             ThrowIfDisposed();
             m_Primitives.GetAliveIndices(output);
+        }
+
+        public bool GetPrimitiveBounds(int primitiveIndex, out float3 bMin, out float3 bMax)
+        {
+            ThrowIfDisposed();
+
+            if (!m_Primitives.IsAlive(primitiveIndex))
+            {
+                bMin = default;
+                bMax = default;
+                return false;
+            }
+
+            NativeSlice<int> vertices = m_PrimitiveStorage.GetVertices(primitiveIndex);
+            int count = vertices.Length;
+            if (count == 0)
+            {
+                bMin = default;
+                bMax = default;
+                return false;
+            }
+
+            float3 pos = GetPointPosition(GetVertexPoint(vertices[0]));
+            bMin = pos;
+            bMax = pos;
+
+            for (int i = 1; i < count; i++)
+            {
+                pos = GetPointPosition(GetVertexPoint(vertices[i]));
+                bMin = min(bMin, pos);
+                bMax = max(bMax, pos);
+            }
+
+            return true;
         }
     }
 }

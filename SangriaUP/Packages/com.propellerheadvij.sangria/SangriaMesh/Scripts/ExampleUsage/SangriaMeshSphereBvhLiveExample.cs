@@ -116,23 +116,8 @@ public sealed class SangriaMeshSphereBvhLiveExample : MonoBehaviour
 
     private BvhAabb ComputePrimitiveBounds(int primitiveIndex)
     {
-        NativeSlice<int> vertices = m_Detail.GetPrimitiveVertices(primitiveIndex);
-        int count = vertices.Length;
-        if (count == 0)
+        if (!m_Detail.GetPrimitiveBounds(primitiveIndex, out float3 bMin, out float3 bMax))
             return default;
-
-        int pointIdx = m_Detail.GetVertexPoint(vertices[0]);
-        float3 pos = m_Detail.GetPointPosition(pointIdx);
-        float3 bMin = pos;
-        float3 bMax = pos;
-
-        for (int i = 1; i < count; i++)
-        {
-            pointIdx = m_Detail.GetVertexPoint(vertices[i]);
-            pos = m_Detail.GetPointPosition(pointIdx);
-            bMin = min(bMin, pos);
-            bMax = max(bMax, pos);
-        }
 
         return new BvhAabb { Min = bMin, Max = bMax };
     }
