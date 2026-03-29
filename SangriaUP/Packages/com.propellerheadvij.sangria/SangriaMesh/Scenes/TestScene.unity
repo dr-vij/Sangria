@@ -918,9 +918,9 @@ MonoBehaviour:
   m_TargetMeshFilter: {fileID: 1114591413}
   m_LogTimings: 1
   m_LogEveryNFrames: 1
-  m_RemoveVertexZero: 1
+  m_RemoveVertexZero: 0
   m_VertexDeletePolicy: 0
-  m_RemoveFacePrimitives: 1
+  m_RemoveFacePrimitives: 0
   m_RemovedFace: 0
   m_DrawPreview: 1
   m_DrawPoints: 1
@@ -1376,7 +1376,7 @@ MonoBehaviour:
   m_PrimitiveLoopLatitude01: 0.5
   m_PrimitiveLoopStep: 1
   m_DrawPreview: 1
-  m_DrawPoints: 0
+  m_DrawPoints: 1
   m_DrawWireframe: 1
   m_DrawNormals: 0
   m_DrawPointNumbers: 0

@@ -99,7 +99,7 @@ public sealed class SangriaMeshBoxExample : MonoBehaviour
             compileTicks = m_Stopwatch.ElapsedTicks;
 
             m_Stopwatch.Restart();
-            compiled.FillUnityMeshTriangles(m_RuntimeMesh);
+            compiled.FillUnityMesh(m_RuntimeMesh);
             bakeTicks = m_Stopwatch.ElapsedTicks;
 
             if (m_TargetMeshFilter != null && m_TargetMeshFilter.sharedMesh != m_RuntimeMesh)
@@ -225,7 +225,7 @@ public sealed class SangriaMeshBoxExample : MonoBehaviour
             var compiled = detail.Compile(Allocator.TempJob);
             try
             {
-                unityMesh = compiled.ToUnityMeshTriangles("SangriaMeshBox");
+                unityMesh = compiled.ToUnityMesh("SangriaMeshBox");
             }
             finally
             {
