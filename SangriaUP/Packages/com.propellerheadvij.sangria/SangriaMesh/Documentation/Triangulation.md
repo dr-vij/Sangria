@@ -94,6 +94,37 @@ options.WindingRule = TriangulationWindingRule.EvenOdd;
 Triangulation.TriangulateContours(in contours, ref output, in options);
 ```
 
+### Lightweight Raw Triangulation
+
+For temporary on-the-fly triangulation (e.g. ray-casting against a BVH tree) where no attributes or `NativeDetail` are needed, use `TriangulateRaw`. It writes positions and triangle indices directly into caller-owned `NativeList`s:
+
+```csharp
+var positions = new NativeArray<float3>(4, Allocator.Temp);
+positions[0] = new float3(0, 0, 0);
+positions[1] = new float3(4, 0, 0);
+positions[2] = new float3(4, 4, 0);
+positions[3] = new float3(0, 4, 0);
+
+var offsets = new NativeArray<int>(new[] { 0, 4 }, Allocator.Temp);
+var indices = new NativeArray<int>(new[] { 0, 1, 2, 3 }, Allocator.Temp);
+
+var contours = new NativeContourSet(positions, offsets, indices);
+var outPositions = new NativeList<float3>(Allocator.TempJob);
+var outIndices = new NativeList<int>(Allocator.TempJob);
+
+CoreResult result = Triangulation.TriangulateRaw(in contours, ref outPositions, ref outIndices);
+
+// outPositions contains triangle vertex positions
+// outIndices contains triangle index triples (every 3 values = one triangle)
+// Use for ray-casting, BVH queries, etc.
+
+outPositions.Dispose();
+outIndices.Dispose();
+positions.Dispose();
+offsets.Dispose();
+indices.Dispose();
+```
+
 ### With Provenance and Attribute Transfer
 
 ```csharp

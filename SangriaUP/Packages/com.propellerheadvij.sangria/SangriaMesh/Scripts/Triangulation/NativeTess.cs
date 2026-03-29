@@ -393,6 +393,130 @@ namespace SangriaMesh.NativeTess
             return CoreResult.Success;
         }
 
+        public static CoreResult TessellateRaw(
+            in NativeContourSet contours,
+            in TriangulationOptions options,
+            ref NativeList<float3> outPositions,
+            ref NativeList<int> outIndices)
+        {
+            int totalVerts = contours.ContourPointIndices.Length;
+            if (totalVerts == 0)
+                return CoreResult.Success;
+
+            var state = NativeTessState.Create(totalVerts, Allocator.Persistent, trackProvenance: false);
+            try
+            {
+                state.windingRule = MapWindingRule(options.WindingRule);
+                state.normal = options.Normal;
+                state.removeEmptyPolygons = options.RemoveEmptyPolygons;
+
+                TriangulationContourOrientation orientation = options.ContourOrientation;
+
+                RunAlgorithmBurst(ref state, in contours, orientation);
+
+                return EmitRaw(ref state, ref outPositions, ref outIndices);
+            }
+            finally
+            {
+                state.Dispose();
+            }
+        }
+
+        private static CoreResult EmitRaw(
+            ref NativeTessState s,
+            ref NativeList<float3> outPositions,
+            ref NativeList<int> outIndices)
+        {
+            int pointCount = 0;
+            int primitiveCount = 0;
+
+            int vHead = s.mesh.vHead;
+            for (int v = s.mesh.vertices[vHead].next; v != vHead; v = s.mesh.vertices[v].next)
+            {
+                s.mesh.vertices.ElementAt(v).n = Undef;
+            }
+
+            int fHead = s.mesh.fHead;
+            if (s.removeEmptyPolygons)
+            {
+                for (int f = s.mesh.faces[fHead].next; f != fHead; f = s.mesh.faces[f].next)
+                {
+                    if (!s.mesh.faces[f].inside) continue;
+                    float area = Geom.FaceArea(ref s.mesh, f);
+                    if (math.abs(area) < float.Epsilon)
+                        s.mesh.faces.ElementAt(f).inside = false;
+                }
+            }
+
+            for (int f = s.mesh.faces[fHead].next; f != fHead; f = s.mesh.faces[f].next)
+            {
+                if (!s.mesh.faces[f].inside) continue;
+
+                int edge = s.mesh.faces[f].anEdge;
+                int faceVerts = 0;
+                int startE = edge;
+                do
+                {
+                    int v = s.mesh.Org(edge);
+                    if (s.mesh.vertices[v].n == Undef)
+                    {
+                        s.mesh.vertices.ElementAt(v).n = pointCount;
+                        pointCount++;
+                    }
+                    faceVerts++;
+                    edge = s.mesh.Lnext(edge);
+                } while (edge != startE);
+
+                if (faceVerts >= 3)
+                    primitiveCount += faceVerts - 2;
+            }
+
+            if (pointCount <= 0 || primitiveCount <= 0)
+                return CoreResult.Success;
+
+            outPositions.Clear();
+            outIndices.Clear();
+
+            if (outPositions.Capacity < pointCount)
+                outPositions.Capacity = pointCount;
+            if (outIndices.Capacity < primitiveCount * 3)
+                outIndices.Capacity = primitiveCount * 3;
+
+            outPositions.Length = pointCount;
+            outIndices.Length = primitiveCount * 3;
+
+            for (int v = s.mesh.vertices[vHead].next; v != vHead; v = s.mesh.vertices[v].next)
+            {
+                if (s.mesh.vertices[v].n == Undef) continue;
+                outPositions[s.mesh.vertices[v].n] = s.mesh.vertices[v].coords;
+            }
+
+            int cursor = 0;
+            for (int f = s.mesh.faces[fHead].next; f != fHead; f = s.mesh.faces[f].next)
+            {
+                if (!s.mesh.faces[f].inside) continue;
+
+                int edge = s.mesh.faces[f].anEdge;
+                int firstVertex = s.mesh.vertices[s.mesh.Org(edge)].n;
+                edge = s.mesh.Lnext(edge);
+                int prevVertex = s.mesh.vertices[s.mesh.Org(edge)].n;
+                edge = s.mesh.Lnext(edge);
+
+                while (edge != s.mesh.faces[f].anEdge)
+                {
+                    outIndices[cursor * 3] = firstVertex;
+                    outIndices[cursor * 3 + 1] = prevVertex;
+                    outIndices[cursor * 3 + 2] = s.mesh.vertices[s.mesh.Org(edge)].n;
+                    cursor++;
+
+                    prevVertex = s.mesh.vertices[s.mesh.Org(edge)].n;
+                    edge = s.mesh.Lnext(edge);
+                }
+            }
+
+            return CoreResult.Success;
+        }
+
         private static WindingRule MapWindingRule(TriangulationWindingRule rule)
         {
             return rule switch

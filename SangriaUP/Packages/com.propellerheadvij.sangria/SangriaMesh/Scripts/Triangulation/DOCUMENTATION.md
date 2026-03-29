@@ -175,6 +175,28 @@ Same as above, but also produces a `ProvenanceMap` mapping each output point to 
 
 **Caller responsibility**: dispose `provenance` when done.
 
+#### TriangulateRaw — Lightweight (No NativeDetail)
+
+```csharp
+public static CoreResult TriangulateRaw(
+    in NativeContourSet contours,
+    ref NativeList<float3> outPositions,
+    ref NativeList<int> outIndices,
+    in TriangulationOptions options = default);
+```
+
+Lightweight triangulation that writes positions and triangle indices directly into caller-owned `NativeList`s. No `NativeDetail` or attribute machinery is involved. Ideal for temporary on-the-fly triangulation such as ray-casting against a BVH tree.
+
+**Preconditions**:
+- `contours.Validate()` must return `CoreResult.Success`
+- `outPositions` and `outIndices` must be created (allocated) by the caller
+
+**Output**:
+- `outPositions` — triangle vertex positions (cleared and filled)
+- `outIndices` — triangle index triples; every 3 consecutive values form one triangle
+
+**Returns**: `CoreResult.Success` on success, validation error code on invalid input.
+
 ### ProvenanceRecord (Struct)
 
 Fixed-size record describing the origin of a single output vertex.

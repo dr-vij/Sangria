@@ -284,6 +284,7 @@ Typed read/write accessor for attribute data.
 |--------|-------------|
 | `TriangulateContours(in NativeContourSet, ref NativeDetail, in TriangulationOptions)` | Tessellate without provenance |
 | `TriangulateContours(in NativeContourSet, ref NativeDetail, out ProvenanceMap, in TriangulationOptions)` | Tessellate with provenance |
+| `TriangulateRaw(in NativeContourSet, ref NativeList<float3>, ref NativeList<int>, in TriangulationOptions)` | Lightweight triangulation returning positions and triangle indices directly, no NativeDetail |
 
 #### NativeContourSet (readonly struct)
 

@@ -142,5 +142,31 @@ namespace SangriaMesh
 
             return NativeTess.NativeTessAPI.Tessellate(in contours, ref output, out provenance, in options);
         }
+
+        /// <summary>
+        /// Lightweight triangulation that writes positions and triangle indices into caller-owned lists.
+        /// No <see cref="NativeDetail"/> or attribute machinery is involved, making this ideal for
+        /// temporary on-the-fly triangulation (e.g. ray-casting against a BVH tree).
+        /// The caller is responsible for creating and disposing the lists.
+        /// </summary>
+        public static CoreResult TriangulateRaw(
+            in NativeContourSet contours,
+            ref NativeList<float3> outPositions,
+            ref NativeList<int> outIndices,
+            in TriangulationOptions options = default)
+        {
+            CoreResult validation = contours.Validate();
+            if (validation != CoreResult.Success)
+                return validation;
+
+            if (contours.ContourCount == 0)
+            {
+                outPositions.Clear();
+                outIndices.Clear();
+                return CoreResult.Success;
+            }
+
+            return NativeTess.NativeTessAPI.TessellateRaw(in contours, in options, ref outPositions, ref outIndices);
+        }
     }
 }
